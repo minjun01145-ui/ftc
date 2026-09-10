@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>현장체험학습 예산·정산 자동화 MVP</title>
+  <meta name="description" content="현장체험학습 비용 산출, 재원 배분, 정산 및 검증을 자동화하는 브라우저 기반 도구" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <div class="eyebrow">FIELD TRIP BUDGET · MVP</div>
+      <h1>현장체험학습 예산·정산 자동화</h1>
+    </div>
+    <div class="top-actions">
+      <button id="exportBtn" class="button secondary">JSON 저장</button>
+      <label class="button secondary file-button">JSON 불러오기<input id="importInput" type="file" accept="application/json,.json" /></label>
+      <button id="printBtn" class="button secondary">인쇄</button>
+      <button id="resetBtn" class="button danger ghost">예시로 초기화</button>
+    </div>
+  </header>
+
+  <nav class="tabs" aria-label="주요 화면">
+    <button class="tab active" data-tab="overview">기본정보</button>
+    <button class="tab" data-tab="expenses">비용산출</button>
+    <button class="tab" data-tab="funding">재원·자동배분</button>
+    <button class="tab" data-tab="settlement">정산·검증</button>
+  </nav>
+
+  <main id="app" class="app"></main>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>
