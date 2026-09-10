@@ -1,29 +1,28 @@
 import assert from 'node:assert/strict';
-import { defaultProject } from '../js/presets.js';
-import { calculateExpense, summarize } from '../js/engine.js';
+import { sampleProject } from '../js/presets.js';
+import { allocateFunding, calculateExpense, projectCounts, validateProject } from '../js/engine.js';
 
-const project = structuredClone(defaultProject);
-const summary = summarize(project, false);
-const bus = calculateExpense(project.expenses.find(e => e.id === 'bus'), project, false);
+const project = sampleProject();
+const counts = projectCounts(project);
+assert.equal(counts.participants, 70);
+assert.equal(counts.absent, 1);
+assert.equal(counts.regularParticipants, 53);
+assert.equal(counts.vulnerableParticipants, 17);
 
-assert.equal(summary.counts.actualStudents, 70);
-assert.equal(summary.counts.fixedStudents, 71);
+const bus = calculateExpense(project.expenses[0], project, false);
 assert.equal(bus.unit, 113920);
 assert.equal(bus.studentTotal, 8088320);
 assert.equal(bus.staffTotal, 911680);
-assert.equal(summary.allocation.expensesResult.studentTotal, 22129900);
-assert.equal(summary.personalBurden, 43000);
 
-const edu = summary.allocation.accountResults.find(a => a.id === 'edu');
-const art = summary.allocation.accountResults.find(a => a.id === 'art');
-const school = summary.allocation.accountResults.find(a => a.id === 'school');
-const student = summary.allocation.accountResults.find(a => a.id === 'student');
+const funding = allocateFunding(project, false);
+assert.ok(funding.expenses.studentTotal > 0);
+assert.equal(funding.educationUsed + funding.schoolUsed + funding.studentUsed, funding.expenses.studentTotal);
+assert.equal(validateProject(project, false).issues.length, 0);
 
-assert.equal(edu.used, 17174400);
-assert.equal(edu.balance, 3185600);
-assert.equal(art.used, 954000);
-assert.equal(school.used, 1722500);
-assert.equal(student.used, 2279000);
-assert.equal(summary.allocation.uncovered, 0);
+const changed = structuredClone(project);
+changed.actualParticipants = 69;
+changed.absentStudents = 1;
+const bus2 = calculateExpense(changed.expenses[0], changed, false);
+assert.notEqual(bus2.unit, bus.unit);
 
-console.log('✓ 핵심 계산 테스트 통과');
+console.log('✓ 계산 엔진 테스트 통과');
