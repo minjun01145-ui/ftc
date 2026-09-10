@@ -213,12 +213,14 @@ export function validateProject(project, settlement = false) {
   const c = projectCounts(project);
   const result = allocateFunding(project, settlement);
   const issues = [];
+  const enteredVulnerableParticipants = Math.max(0, number(project.vulnerableParticipants));
+  const enteredVulnerableAbsent = Math.max(0, number(project.vulnerableAbsent));
 
   if (c.participants + c.absent !== c.total) {
     issues.push(`총학생수(${c.total})와 실제참가학생수+불참자수(${c.participants + c.absent})가 일치하지 않습니다.`);
   }
-  if (c.vulnerableParticipants > c.participants) issues.push('취약계층 참가학생수가 실제 참가학생수보다 많습니다.');
-  if (c.vulnerableAbsent > c.absent) issues.push('취약계층 불참자수가 전체 불참자수보다 많습니다.');
+  if (enteredVulnerableParticipants > c.participants) issues.push('취약계층 참가학생수가 실제 참가학생수보다 많습니다.');
+  if (enteredVulnerableAbsent > c.absent) issues.push('취약계층 불참자수가 전체 불참자수보다 많습니다.');
   if (result.educationBalance !== null && result.educationBalance < 0) {
     issues.push(`교육청 교부액보다 ${Math.abs(result.educationBalance).toLocaleString()}원을 초과하여 배분했습니다.`);
   }
