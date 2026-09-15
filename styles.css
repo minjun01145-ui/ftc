@@ -196,3 +196,43 @@ table input[type="text"] { min-width: 150px; }
   #main { padding: 0; }
   fieldset { break-inside: avoid; }
 }
+
+.section-fieldset { position: relative; }
+.section-save {
+  position: absolute;
+  top: 7px;
+  right: 10px;
+}
+
+.section-note {
+  margin: 0 0 10px;
+  padding: 7px 9px;
+  border: 1px solid #c5c5c5;
+  background: #eee;
+  color: #444;
+}
+.report-text {
+  margin-top: 12px;
+  padding: 8px 10px;
+  border-top: 1px solid #bbb;
+  background: #fafafa;
+  line-height: 1.7;
+}
+.report-text p { margin: 2px 0; }
+.input-with-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.input-with-option > input[type="number"] {
+  flex: 1;
+  min-width: 120px;
+}
+.check-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  text-align: left !important;
+}
+.check-label input { margin: 0; }

@@ -26,6 +26,7 @@ export function createProject(title = '새 사업') {
     totalStudents: 0,
     actualParticipants: 0,
     absentStudents: 0,
+    vulnerableStudents: 0,
     vulnerableParticipants: 0,
     vulnerableAbsent: 0,
     chaperones: 0,
@@ -80,6 +81,14 @@ function normalizeExpense(expense) {
 function normalizeProject(project) {
   const source = project && typeof project === 'object' ? project : {};
   const base = createProject(String(source.title ?? '새 사업'));
+  const vulnerableAbsent = Math.max(0, number(source.vulnerableAbsent));
+  const vulnerableStudents = source.vulnerableStudents === undefined || source.vulnerableStudents === null
+    ? Math.max(0, number(source.vulnerableParticipants) + vulnerableAbsent)
+    : Math.max(0, number(source.vulnerableStudents));
+  const vulnerableParticipants = source.vulnerableStudents === undefined || source.vulnerableStudents === null
+    ? Math.max(0, number(source.vulnerableParticipants))
+    : Math.max(0, vulnerableStudents - vulnerableAbsent);
+
   return {
     ...base,
     ...source,
@@ -90,8 +99,9 @@ function normalizeProject(project) {
     totalStudents: Math.max(0, number(source.totalStudents)),
     actualParticipants: Math.max(0, number(source.actualParticipants)),
     absentStudents: Math.max(0, number(source.absentStudents)),
-    vulnerableParticipants: Math.max(0, number(source.vulnerableParticipants)),
-    vulnerableAbsent: Math.max(0, number(source.vulnerableAbsent)),
+    vulnerableStudents,
+    vulnerableParticipants,
+    vulnerableAbsent,
     chaperones: Math.max(0, number(source.chaperones)),
     educationSupport: {
       ...base.educationSupport,
@@ -141,6 +151,7 @@ export function sampleProject() {
     totalStudents: 71,
     actualParticipants: 70,
     absentStudents: 1,
+    vulnerableStudents: 18,
     vulnerableParticipants: 17,
     vulnerableAbsent: 1,
     chaperones: 8,

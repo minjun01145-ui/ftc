@@ -68,7 +68,7 @@ function saveSchool(form) {
   showMessage('저장했습니다.');
 }
 
-function saveProject(form) {
+function saveProject(form, messageText = '저장했습니다.') {
   const state = getState();
   const project = state.projects.find(item => item.id === currentPage.projectId);
   if (!project) return;
@@ -80,7 +80,7 @@ function saveProject(form) {
   });
   persistState();
   render();
-  showMessage('저장했습니다.');
+  showMessage(messageText);
 }
 
 schoolNav.addEventListener('click', () => {
@@ -123,10 +123,19 @@ main.addEventListener('change', event => {
   dirty = true;
   const target = event.target;
 
-  if (target.name === 'vulnerableMode') {
+  if (target.name === 'vulnerableFullSupport') {
     const form = target.form;
     const amount = form?.elements.vulnerablePerPerson;
-    if (amount) amount.disabled = target.value === 'full';
+    if (amount) {
+      if (target.checked) {
+        amount.dataset.manualValue = amount.value;
+        amount.value = amount.dataset.autoValue ?? '0';
+        amount.readOnly = true;
+      } else {
+        amount.readOnly = false;
+        amount.value = amount.dataset.manualValue ?? '0';
+      }
+    }
   }
 
   if (target.dataset.field === 'quantityBase') {
@@ -143,6 +152,16 @@ main.addEventListener('click', event => {
   const form = button.closest('form');
   const tbody = form?.querySelector('#expenseTableBody');
   const row = button.closest('[data-expense-row]');
+
+  if (action === 'save-headcount' && form) {
+    saveProject(form, '인원 정보를 저장했습니다.');
+    return;
+  }
+
+  if (action === 'save-budget' && form) {
+    saveProject(form, '예산 정보를 저장했습니다.');
+    return;
+  }
 
   if (action === 'add-expense' && tbody) {
     const project = getState().projects.find(item => item.id === currentPage.projectId);

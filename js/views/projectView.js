@@ -1,9 +1,25 @@
-import { allocateFunding, projectCounts, validateProject } from '../engine.js';
+import { allocateFunding, calculateExpenses, projectCounts, validateProject } from '../engine.js';
 import { escapeHtml, formatWon, number } from '../utils.js';
 import { readExpenseRows, renderExpenseRows } from './expenseTable.js';
 
 function money(value) {
   return formatWon(Math.round(number(value)));
+}
+
+function vulnerableStudentTotal(project) {
+  if (project.vulnerableStudents !== undefined && project.vulnerableStudents !== null) {
+    return Math.max(0, number(project.vulnerableStudents));
+  }
+  return Math.max(0, number(project.vulnerableParticipants) + number(project.vulnerableAbsent));
+}
+
+function vulnerableFullPerPerson(project) {
+  const counts = projectCounts(project);
+  if (counts.vulnerableParticipants <= 0) return 0;
+
+  const expenses = calculateExpenses(project, true);
+  const participantCost = expenses.rows.reduce((sum, row) => sum + row.cohortCosts.vulnerable, 0);
+  return participantCost / counts.vulnerableParticipants;
 }
 
 function renderAllocationTable(project, settlement) {
@@ -55,8 +71,85 @@ function renderValidation(project) {
   return `<div class="status-box"><span class="error-text">확인할 항목이 있습니다.</span><ul>${validation.issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join('')}</ul></div>`;
 }
 
-export function renderProjectPage(project, school) {
+function renderHeadcountReport(project) {
   const counts = projectCounts(project);
+  const vulnerableTotal = vulnerableStudentTotal(project);
+  const totalParticipants = counts.participants + counts.chaperones;
+
+  return `
+    <div class="report-text" aria-live="polite">
+      <p>총학생수 ${counts.total}명 중 학생 불참자는 ${counts.absent}명으로 실제 참가학생 수는 ${counts.participants}명입니다. 인솔자 수는 ${counts.chaperones}명입니다. 총 참가자 수(인솔자 포함)는 ${totalParticipants}명입니다.</p>
+      <p>취약계층은 ${vulnerableTotal}명이며 그 중 불참자는 ${counts.vulnerableAbsent}명입니다.</p>
+    </div>`;
+}
+
+function renderHeadcountSection(project) {
+  const counts = projectCounts(project);
+  const vulnerableTotal = vulnerableStudentTotal(project);
+
+  return `
+    <fieldset class="section-fieldset">
+      <legend>인원</legend>
+      <button type="button" class="section-save" data-action="save-headcount">저장</button>
+      <p class="section-note">회색 칸은 자동 계산으로, 저장버튼을 누르면 자동으로 계산됩니다.</p>
+      <div class="form-grid">
+        <label for="totalStudents">총학생수</label>
+        <input id="totalStudents" name="totalStudents" type="number" min="0" value="${number(project.totalStudents)}">
+        <label for="absentStudents">불참자수</label>
+        <input id="absentStudents" name="absentStudents" type="number" min="0" value="${number(project.absentStudents)}">
+
+        <label for="actualParticipants">실제 참가학생수</label>
+        <input id="actualParticipants" name="actualParticipants" type="number" value="${counts.participants}" readonly>
+        <span></span><span></span>
+
+        <label for="vulnerableStudents">취약계층 학생수</label>
+        <input id="vulnerableStudents" name="vulnerableStudents" type="number" min="0" value="${vulnerableTotal}">
+        <label for="vulnerableAbsent">취약계층 중 불참자수</label>
+        <input id="vulnerableAbsent" name="vulnerableAbsent" type="number" min="0" value="${number(project.vulnerableAbsent)}">
+
+        <label for="chaperones">인솔자수</label>
+        <input id="chaperones" name="chaperones" type="number" min="0" value="${number(project.chaperones)}">
+      </div>
+      ${renderHeadcountReport(project)}
+    </fieldset>`;
+}
+
+function renderBudgetSection(project) {
+  const fullSupport = project.educationSupport.vulnerableMode === 'full';
+  const automaticVulnerableAmount = Math.round(vulnerableFullPerPerson(project));
+  const manualVulnerableAmount = Math.max(0, number(project.educationSupport.vulnerablePerPerson));
+  const displayedVulnerableAmount = fullSupport ? automaticVulnerableAmount : manualVulnerableAmount;
+  const studentBurden = Math.round(allocateFunding(project, true).regularPersonalBurden);
+
+  return `
+    <fieldset class="section-fieldset">
+      <legend>예산</legend>
+      <button type="button" class="section-save" data-action="save-budget">저장</button>
+      <p class="section-note">교육청 지원금, 학교 자체 지원금을 입력해 주세요. 수익자 부담금은 체험처와 비용 등을 입력한 후 자동 계산됩니다.</p>
+      <div class="form-grid">
+        <label for="regularPerPerson">교육청 지원금(비취약계층 1인당)</label>
+        <input id="regularPerPerson" name="regularPerPerson" type="number" min="0" value="${number(project.educationSupport.regularPerPerson)}">
+
+        <label for="vulnerablePerPerson">교육청 지원금(취약계층 1인당)</label>
+        <div class="input-with-option">
+          <input id="vulnerablePerPerson" name="vulnerablePerPerson" type="number" min="0"
+            value="${displayedVulnerableAmount}"
+            data-auto-value="${automaticVulnerableAmount}"
+            data-manual-value="${manualVulnerableAmount}"
+            ${fullSupport ? 'readonly' : ''}>
+          <label class="check-label"><input type="checkbox" name="vulnerableFullSupport" ${fullSupport ? 'checked' : ''}> 실비 전액</label>
+        </div>
+
+        <label for="schoolSupportAmount">학교 자체 지원금</label>
+        <input id="schoolSupportAmount" name="schoolSupportAmount" type="number" min="0" value="${number(project.schoolSupport.amount)}">
+
+        <label for="studentBurden">수익자 부담금</label>
+        <input id="studentBurden" type="number" value="${studentBurden}" readonly>
+      </div>
+    </fieldset>`;
+}
+
+export function renderProjectPage(project, school) {
   return `
     <h1>${escapeHtml(project.title)}</h1>
     <form id="projectForm" data-project-id="${escapeHtml(project.id)}">
@@ -75,53 +168,8 @@ export function renderProjectPage(project, school) {
         </div>
       </fieldset>
 
-      <fieldset>
-        <legend>인원 및 지원기준</legend>
-        <div class="form-grid">
-          <label for="totalStudents">총학생수</label>
-          <input id="totalStudents" name="totalStudents" type="number" min="0" value="${number(project.totalStudents)}">
-          <label for="actualParticipants">실제 참가학생수</label>
-          <input id="actualParticipants" name="actualParticipants" type="number" min="0" value="${number(project.actualParticipants)}">
-
-          <label for="absentStudents">불참자수</label>
-          <input id="absentStudents" name="absentStudents" type="number" min="0" value="${number(project.absentStudents)}">
-          <label for="chaperones">인솔자수</label>
-          <input id="chaperones" name="chaperones" type="number" min="0" value="${number(project.chaperones)}">
-
-          <label for="vulnerableParticipants">취약계층 참가학생수</label>
-          <input id="vulnerableParticipants" name="vulnerableParticipants" type="number" min="0" value="${number(project.vulnerableParticipants)}">
-          <label for="vulnerableAbsent">취약계층 불참자수</label>
-          <input id="vulnerableAbsent" name="vulnerableAbsent" type="number" min="0" value="${number(project.vulnerableAbsent)}">
-
-          <label>비취약 참가학생수</label>
-          <input readonly value="${counts.regularParticipants}">
-          <label>비취약 불참자수</label>
-          <input readonly value="${counts.regularAbsent}">
-
-          <label for="regularPerPerson">교육청 지원금(비취약 1인당)</label>
-          <input id="regularPerPerson" name="regularPerPerson" type="number" min="0" value="${number(project.educationSupport.regularPerPerson)}">
-          <label for="grantTotal">교육청 실제 교부액</label>
-          <input id="grantTotal" name="grantTotal" type="number" min="0" placeholder="정산용, 선택 입력" value="${project.educationSupport.grantTotal ?? ''}">
-
-          <label for="vulnerableMode">교육청 지원금(취약계층)</label>
-          <select id="vulnerableMode" name="vulnerableMode">
-            <option value="full" ${project.educationSupport.vulnerableMode === 'full' ? 'selected' : ''}>실비 전액</option>
-            <option value="perPerson" ${project.educationSupport.vulnerableMode === 'perPerson' ? 'selected' : ''}>1인당 정액</option>
-          </select>
-          <label for="vulnerablePerPerson">취약계층 1인당 지원액</label>
-          <input id="vulnerablePerPerson" name="vulnerablePerPerson" type="number" min="0" value="${number(project.educationSupport.vulnerablePerPerson)}" ${project.educationSupport.vulnerableMode === 'full' ? 'disabled' : ''}>
-
-          <label for="schoolSupportMode">학교 자체지원금 방식</label>
-          <select id="schoolSupportMode" name="schoolSupportMode">
-            <option value="total" ${project.schoolSupport.mode === 'total' ? 'selected' : ''}>총액</option>
-            <option value="perPersonRegular" ${project.schoolSupport.mode === 'perPersonRegular' ? 'selected' : ''}>비취약 참가학생 1인당</option>
-          </select>
-          <label for="schoolSupportAmount">학교 자체지원금</label>
-          <input id="schoolSupportAmount" name="schoolSupportAmount" type="number" min="0" value="${number(project.schoolSupport.amount)}">
-        </div>
-        <p class="help">교육청 지원금과 학교 자체지원금은 아래 비용 항목의 위쪽부터 순서대로 배분합니다.</p>
-      </fieldset>
-
+      ${renderHeadcountSection(project)}
+      ${renderBudgetSection(project)}
       ${renderValidation(project)}
 
       <h2>체험처/비용</h2>
@@ -158,7 +206,7 @@ export function renderProjectPage(project, school) {
       </fieldset>
 
       <div class="page-actions">
-        <button type="submit">저장</button>
+        <button type="submit">전체 저장</button>
         <button type="button" data-action="print">인쇄</button>
         <button type="button" class="danger" data-action="delete-project">이 사업 삭제</button>
       </div>
@@ -169,32 +217,38 @@ export function renderProjectPage(project, school) {
 export function readProjectForm(form, previous) {
   const data = new FormData(form);
   const tbody = form.querySelector('#expenseTableBody');
-  const grantValue = data.get('grantTotal');
-  const vulnerableMode = data.get('vulnerableMode') === 'perPerson' ? 'perPerson' : 'full';
+
+  const totalStudents = Math.max(0, number(data.get('totalStudents')));
+  const absentStudents = Math.max(0, number(data.get('absentStudents')));
+  const actualParticipants = Math.max(0, totalStudents - absentStudents);
+  const vulnerableStudents = Math.max(0, number(data.get('vulnerableStudents')));
+  const vulnerableAbsent = Math.max(0, number(data.get('vulnerableAbsent')));
+  const vulnerableParticipants = Math.max(0, vulnerableStudents - vulnerableAbsent);
+  const vulnerableMode = data.get('vulnerableFullSupport') === 'on' ? 'full' : 'perPerson';
 
   return {
     ...previous,
     title: String(data.get('title') ?? '').trim(),
     startDate: String(data.get('startDate') ?? ''),
     endDate: String(data.get('endDate') ?? ''),
-    totalStudents: Math.max(0, number(data.get('totalStudents'))),
-    actualParticipants: Math.max(0, number(data.get('actualParticipants'))),
-    absentStudents: Math.max(0, number(data.get('absentStudents'))),
-    vulnerableParticipants: Math.max(0, number(data.get('vulnerableParticipants'))),
-    vulnerableAbsent: Math.max(0, number(data.get('vulnerableAbsent'))),
+    totalStudents,
+    actualParticipants,
+    absentStudents,
+    vulnerableStudents,
+    vulnerableParticipants,
+    vulnerableAbsent,
     chaperones: Math.max(0, number(data.get('chaperones'))),
     educationSupport: {
       ...previous.educationSupport,
       regularPerPerson: Math.max(0, number(data.get('regularPerPerson'))),
       vulnerableMode,
       vulnerablePerPerson: vulnerableMode === 'full'
-        ? previous.educationSupport.vulnerablePerPerson
-        : Math.max(0, number(data.get('vulnerablePerPerson'))),
-      grantTotal: grantValue === '' || grantValue == null ? null : Math.max(0, number(grantValue))
+        ? Math.max(0, number(previous.educationSupport.vulnerablePerPerson))
+        : Math.max(0, number(data.get('vulnerablePerPerson')))
     },
     schoolSupport: {
       ...previous.schoolSupport,
-      mode: data.get('schoolSupportMode') === 'perPersonRegular' ? 'perPersonRegular' : 'total',
+      mode: previous.schoolSupport.mode,
       amount: Math.max(0, number(data.get('schoolSupportAmount')))
     },
     expenses: readExpenseRows(tbody, previous.expenses),
