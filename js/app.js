@@ -184,6 +184,16 @@ main.addEventListener('click', event => {
     return;
   }
 
+  if (action === 'save-student-expenses' && form) {
+    saveProject(form, '학생용 체험처/비용을 저장했습니다.');
+    return;
+  }
+
+  if (action === 'save-staff-expenses' && form) {
+    saveProject(form, '인솔자용 체험처/비용을 저장했습니다.');
+    return;
+  }
+
   if (action === 'add-expense' && tbody) {
     const project = getState().projects.find(item => item.id === currentPage.projectId);
     if (!project) return;

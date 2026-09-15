@@ -118,6 +118,7 @@ function renderStudentExpenseSection(project) {
   return `
     <fieldset class="section-fieldset expense-section" data-expense-section="student">
       <legend>체험처/비용(학생용)</legend>
+      <button type="button" class="section-save" data-action="save-student-expenses">저장</button>
       <div class="section-note expense-guide">
         <p>일정별 체험처와 금액 등을 입력해 주세요. 세부정보를 입력하면 안내자료 생성 기능에 사용할 수 있습니다.</p>
         <p>대상인원의 경우 참가 학생별 결제를 하는 곳(식당, 공연 등)은 1인당 금액으로 설정하세요.</p>
@@ -147,6 +148,7 @@ function renderStaffExpenseSection(project) {
   return `
     <fieldset class="section-fieldset expense-section" data-expense-section="staff">
       <legend>체험처/비용(인솔자용)</legend>
+      <button type="button" class="section-save" data-action="save-staff-expenses">저장</button>
       <p class="section-note">학생용 일정과 체험처를 복사한 뒤 인솔자에게 필요 없는 항목을 삭제하거나 금액을 수정할 수 있습니다.</p>
       <div class="toolbar">
         <button type="button" data-action="copy-student-expenses">학생용 작성 내용 붙여넣기</button>
