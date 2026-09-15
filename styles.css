@@ -236,3 +236,47 @@ table input[type="text"] { min-width: 150px; }
   text-align: left !important;
 }
 .check-label input { margin: 0; }
+
+.expense-guide p { margin: 2px 0; }
+.expense-actions {
+  min-width: 210px;
+  white-space: normal;
+  text-align: center;
+}
+.expense-actions button { margin: 1px; }
+.expense-detail-editor td,
+.expense-detail-view td {
+  background: #f7f7f7;
+  white-space: normal;
+  padding: 9px 10px;
+}
+.detail-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(260px, 1fr));
+  gap: 8px 14px;
+}
+.detail-editor-grid label {
+  display: grid;
+  grid-template-columns: 95px minmax(140px, 1fr);
+  gap: 6px;
+  align-items: center;
+}
+.detail-editor-grid input { width: 100%; }
+.detail-editor-actions { margin-top: 8px; text-align: right; }
+.detail-view-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(260px, 1fr));
+  gap: 6px 18px;
+  line-height: 1.6;
+}
+.detail-view-grid strong {
+  display: inline-block;
+  min-width: 95px;
+  font-weight: normal;
+  color: #444;
+}
+
+@media (max-width: 900px) {
+  .detail-editor-grid,
+  .detail-view-grid { grid-template-columns: 1fr; }
+}

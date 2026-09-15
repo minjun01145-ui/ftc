@@ -1,7 +1,19 @@
 import { createProject } from './presets.js';
 import { getState, persistState, replaceState, updateState } from './state.js';
 import { downloadJson, escapeHtml } from './utils.js';
-import { addExpenseRow, toggleCustomQuantity, updateExpenseRowButtons } from './views/expenseTable.js';
+import {
+  addExpenseRow,
+  cloneExpensesForStaff,
+  moveExpenseGroup,
+  readExpenseRows,
+  removeExpenseGroup,
+  replaceExpenseRows,
+  syncExpenseDetailAvailability,
+  toggleCustomQuantity,
+  toggleExpenseDetailEditor,
+  toggleExpenseDetailView,
+  updateExpenseRowButtons
+} from './views/expenseTable.js';
 import { readProjectForm, renderProjectPage } from './views/projectView.js';
 import { readSchoolForm, renderSchoolPage } from './views/schoolView.js';
 
@@ -50,7 +62,8 @@ function render() {
   }
 
   main.innerHTML = renderProjectPage(project, state.school);
-  updateExpenseRowButtons(main.querySelector('#expenseTableBody'));
+  updateExpenseRowButtons(main.querySelector('#studentExpenseTableBody'));
+  updateExpenseRowButtons(main.querySelector('#staffExpenseTableBody'));
   dirty = false;
 }
 
@@ -115,8 +128,14 @@ main.addEventListener('submit', event => {
   if (form.id === 'projectForm') saveProject(form);
 });
 
-main.addEventListener('input', () => {
+main.addEventListener('input', event => {
   dirty = true;
+  const target = event.target;
+  if (target.dataset.detailField !== undefined) {
+    const editor = target.closest('[data-expense-detail-editor]');
+    const tbody = target.closest('tbody');
+    if (editor && tbody) syncExpenseDetailAvailability(tbody, editor.dataset.expenseDetailEditor);
+  }
 });
 
 main.addEventListener('change', event => {
@@ -150,8 +169,10 @@ main.addEventListener('click', event => {
 
   const action = button.dataset.action;
   const form = button.closest('form');
-  const tbody = form?.querySelector('#expenseTableBody');
+  const expenseSection = button.closest('[data-expense-section]');
+  const tbody = expenseSection?.querySelector('[data-expense-table]');
   const row = button.closest('[data-expense-row]');
+  const expenseId = row?.dataset.expenseId ?? button.dataset.expenseId ?? '';
 
   if (action === 'save-headcount' && form) {
     saveProject(form, '인원 정보를 저장했습니다.');
@@ -166,29 +187,54 @@ main.addEventListener('click', event => {
   if (action === 'add-expense' && tbody) {
     const project = getState().projects.find(item => item.id === currentPage.projectId);
     if (!project) return;
-    addExpenseRow(tbody, project, form.elements.startDate?.value ?? '');
+    const kind = button.dataset.expenseKind === 'staff' ? 'staff' : 'student';
+    addExpenseRow(tbody, project, form?.elements.startDate?.value ?? '', kind);
     dirty = true;
     return;
   }
 
-  if (action === 'delete-expense' && row && tbody) {
-    row.remove();
-    if (!tbody.querySelector('[data-expense-row]')) {
-      tbody.innerHTML = '<tr data-empty-row><td colspan="12" class="center">등록된 체험처/비용 항목이 없습니다.</td></tr>';
-    }
-    updateExpenseRowButtons(tbody);
+  if (action === 'copy-student-expenses' && form) {
+    const project = getState().projects.find(item => item.id === currentPage.projectId);
+    const studentTbody = form.querySelector('#studentExpenseTableBody');
+    const staffTbody = form.querySelector('#staffExpenseTableBody');
+    if (!project || !studentTbody || !staffTbody) return;
+
+    const staffHasRows = staffTbody.querySelector('[data-expense-row]');
+    if (staffHasRows && !confirm('현재 인솔자용 작성 내용이 있습니다. 학생용 내용으로 덮어쓸까요?')) return;
+
+    const currentStudentExpenses = readExpenseRows(studentTbody, project.expenses);
+    const copied = cloneExpensesForStaff(currentStudentExpenses);
+    replaceExpenseRows(staffTbody, copied, project, 'staff', false);
+    dirty = true;
+    showMessage('학생용 작성 내용을 인솔자용에 붙여넣었습니다. 저장하면 반영됩니다.');
+    return;
+  }
+
+  if (action === 'delete-expense' && tbody && expenseId) {
+    removeExpenseGroup(tbody, expenseId);
     dirty = true;
     return;
   }
 
-  if ((action === 'move-expense-up' || action === 'move-expense-down') && row && tbody) {
-    const sibling = action === 'move-expense-up' ? row.previousElementSibling : row.nextElementSibling;
-    if (sibling?.matches('[data-expense-row]')) {
-      if (action === 'move-expense-up') tbody.insertBefore(row, sibling);
-      else tbody.insertBefore(sibling, row);
-      updateExpenseRowButtons(tbody);
-      dirty = true;
-    }
+  if ((action === 'move-expense-up' || action === 'move-expense-down') && tbody && expenseId) {
+    moveExpenseGroup(tbody, expenseId, action === 'move-expense-up' ? 'up' : 'down');
+    dirty = true;
+    return;
+  }
+
+  if (action === 'edit-expense-details' && tbody && expenseId) {
+    toggleExpenseDetailEditor(tbody, expenseId);
+    return;
+  }
+
+  if (action === 'close-detail-editor') {
+    const detailTbody = button.closest('tbody');
+    if (detailTbody && expenseId) toggleExpenseDetailEditor(detailTbody, expenseId, true);
+    return;
+  }
+
+  if (action === 'toggle-expense-details' && tbody && expenseId) {
+    toggleExpenseDetailView(tbody, expenseId);
     return;
   }
 

@@ -13,6 +13,12 @@ export function createExpense(overrides = {}) {
     actualAmount: null,
     rounding: 'floor10',
     note: '',
+    details: {
+      arrivalTime: '',
+      departureTime: '',
+      address: '',
+      contact: ''
+    },
     ...overrides
   };
 }
@@ -41,12 +47,13 @@ export function createProject(title = '새 사업') {
       amount: 0
     },
     expenses: [],
+    staffExpenses: [],
     memo: ''
   };
 }
 
 export const defaultState = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   school: {
     name: '',
     homepage: '',
@@ -74,7 +81,13 @@ function normalizeExpense(expense) {
     planAmount: Math.max(0, number(source.planAmount)),
     actualAmount: source.actualAmount === '' || source.actualAmount == null ? null : Math.max(0, number(source.actualAmount)),
     rounding: ['floor10', 'floor1', 'round10', 'round1'].includes(source.rounding) ? source.rounding : 'floor10',
-    note: String(source.note ?? '')
+    note: String(source.note ?? ''),
+    details: {
+      arrivalTime: String(source.details?.arrivalTime ?? ''),
+      departureTime: String(source.details?.departureTime ?? ''),
+      address: String(source.details?.address ?? ''),
+      contact: String(source.details?.contact ?? '')
+    }
   };
 }
 
@@ -120,6 +133,7 @@ function normalizeProject(project) {
       amount: Math.max(0, number(source.schoolSupport?.amount))
     },
     expenses: Array.isArray(source.expenses) ? source.expenses.map(normalizeExpense) : [],
+    staffExpenses: Array.isArray(source.staffExpenses) ? source.staffExpenses.map(normalizeExpense) : [],
     memo: String(source.memo ?? '')
   };
 }
@@ -128,7 +142,7 @@ export function normalizeState(value) {
   const source = value && typeof value === 'object' ? value : {};
   const school = source.school && typeof source.school === 'object' ? source.school : {};
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     school: {
       ...clone(defaultState.school),
       ...school,

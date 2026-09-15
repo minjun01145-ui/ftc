@@ -47,3 +47,40 @@ test('취약계층 전체 학생수와 불참자수에서 실제 참가 취약�
   assert.equal(state.projects[0].vulnerableStudents, 18);
   assert.equal(state.projects[0].vulnerableParticipants, 16);
 });
+
+test('기존 비용 데이터는 학생용으로 유지하고 인솔자용 배열을 기본 생성한다', () => {
+  const state = normalizeState({
+    school: {},
+    projects: [{
+      title: '기존 사업',
+      expenses: [{ id: 'student-expense', name: '식비', unitAmount: 10000 }]
+    }]
+  });
+
+  assert.equal(state.schemaVersion, 3);
+  assert.equal(state.projects[0].expenses.length, 1);
+  assert.equal(state.projects[0].expenses[0].id, 'student-expense');
+  assert.deepEqual(state.projects[0].staffExpenses, []);
+});
+
+test('체험처 세부정보와 인솔자용 비용을 정규화한다', () => {
+  const state = normalizeState({
+    school: {},
+    projects: [{
+      title: '세부정보 사업',
+      expenses: [{
+        id: 'student-detail',
+        name: '공연장',
+        details: { arrivalTime: '13:00', departureTime: '15:00', address: '서울시 예시로 1', contact: '02-1234-5678' }
+      }],
+      staffExpenses: [{ id: 'staff-detail', name: '공연장' }]
+    }]
+  });
+
+  assert.equal(state.projects[0].expenses[0].details.address, '서울시 예시로 1');
+  assert.equal(state.projects[0].expenses[0].details.contact, '02-1234-5678');
+  assert.equal(state.projects[0].staffExpenses[0].id, 'staff-detail');
+  assert.deepEqual(state.projects[0].staffExpenses[0].details, {
+    arrivalTime: '', departureTime: '', address: '', contact: ''
+  });
+});
