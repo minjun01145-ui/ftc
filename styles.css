@@ -280,3 +280,30 @@ table input[type="text"] { min-width: 150px; }
   .detail-editor-grid,
   .detail-view-grid { grid-template-columns: 1fr; }
 }
+
+.project-group { border-bottom: 1px solid #d4d4d4; }
+.project-group > .project-item { border-bottom: 0; }
+.project-submenu {
+  border-top: 1px solid #d4d4d4;
+  background: #f8f8f8;
+  padding: 3px 0;
+}
+.project-subitem {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: #222;
+  text-align: left;
+  padding: 6px 10px 6px 26px;
+}
+.project-subitem:hover { background: #e8e8e8; }
+.project-subitem.active {
+  background: #ddd;
+  font-weight: bold;
+}
+.section-output { margin: 0 0 18px; }
+
+@media print {
+  .project-submenu { display: none !important; }
+}

@@ -1,6 +1,7 @@
+import { PROJECT_SECTION, normalizeProjectSection } from './projectSections.js';
 import { createProject } from './presets.js';
 import { getState, persistState, replaceState, updateState } from './state.js';
-import { downloadJson, escapeHtml } from './utils.js';
+import { downloadJson } from './utils.js';
 import {
   addExpenseRow,
   cloneExpensesForStaff,
@@ -15,6 +16,7 @@ import {
   updateExpenseRowButtons
 } from './views/expenseTable.js';
 import { readProjectForm, renderProjectPage } from './views/projectView.js';
+import { renderProjectList } from './views/sidebarView.js';
 import { readSchoolForm, renderSchoolPage } from './views/schoolView.js';
 
 const main = document.querySelector('#main');
@@ -25,9 +27,13 @@ const importInput = document.querySelector('#importInput');
 const message = document.querySelector('#message');
 const schoolNav = document.querySelector('[data-page="school"]');
 
-let currentPage = { type: 'school', projectId: null };
+let currentPage = { type: 'school', projectId: null, section: null };
 let dirty = false;
 let messageTimer;
+
+function projectPage(projectId, section = PROJECT_SECTION.OVERVIEW) {
+  return { type: 'project', projectId, section: normalizeProjectSection(section) };
+}
 
 function showMessage(text) {
   message.textContent = text;
@@ -39,9 +45,7 @@ function showMessage(text) {
 function renderSidebar() {
   const state = getState();
   schoolNav.classList.toggle('active', currentPage.type === 'school');
-  projectList.innerHTML = state.projects.map(project => `
-    <button type="button" class="project-item ${currentPage.type === 'project' && currentPage.projectId === project.id ? 'active' : ''}" data-project-id="${escapeHtml(project.id)}">${escapeHtml(project.title)}</button>
-  `).join('');
+  projectList.innerHTML = renderProjectList(state.projects, currentPage);
 }
 
 function render() {
@@ -56,12 +60,12 @@ function render() {
 
   const project = state.projects.find(item => item.id === currentPage.projectId);
   if (!project) {
-    currentPage = { type: 'school', projectId: null };
+    currentPage = { type: 'school', projectId: null, section: null };
     render();
     return;
   }
 
-  main.innerHTML = renderProjectPage(project, state.school);
+  main.innerHTML = renderProjectPage(project, state.school, currentPage.section);
   updateExpenseRowButtons(main.querySelector('#studentExpenseTableBody'));
   updateExpenseRowButtons(main.querySelector('#staffExpenseTableBody'));
   dirty = false;
@@ -96,17 +100,29 @@ function saveProject(form, messageText = '저장했습니다.') {
   showMessage(messageText);
 }
 
-schoolNav.addEventListener('click', () => {
+function goTo(page) {
   if (!canDiscardChanges()) return;
-  currentPage = { type: 'school', projectId: null };
+  currentPage = page;
   render();
+}
+
+schoolNav.addEventListener('click', () => {
+  goTo({ type: 'school', projectId: null, section: null });
 });
 
 projectList.addEventListener('click', event => {
   const button = event.target.closest('[data-project-id]');
-  if (!button || !canDiscardChanges()) return;
-  currentPage = { type: 'project', projectId: button.dataset.projectId };
-  render();
+  if (!button) return;
+
+  const projectId = button.dataset.projectId;
+  const requestedSection = button.dataset.projectSection ?? PROJECT_SECTION.OVERVIEW;
+  const nextPage = projectPage(projectId, requestedSection);
+
+  if (currentPage.type === 'project'
+      && currentPage.projectId === nextPage.projectId
+      && currentPage.section === nextPage.section) return;
+
+  goTo(nextPage);
 });
 
 addProjectBtn.addEventListener('click', () => {
@@ -117,7 +133,7 @@ addProjectBtn.addEventListener('click', () => {
   const project = createProject(title.trim());
   updateState(state => { state.projects.push(project); });
   persistState();
-  currentPage = { type: 'project', projectId: project.id };
+  currentPage = projectPage(project.id);
   render();
 });
 
@@ -174,23 +190,17 @@ main.addEventListener('click', event => {
   const row = button.closest('[data-expense-row]');
   const expenseId = row?.dataset.expenseId ?? button.dataset.expenseId ?? '';
 
-  if (action === 'save-headcount' && form) {
-    saveProject(form, '인원 정보를 저장했습니다.');
-    return;
-  }
+  const saveActions = {
+    'save-business': '사업정보를 저장했습니다.',
+    'save-headcount': '인원 정보를 저장했습니다.',
+    'save-budget': '예산 정보를 저장했습니다.',
+    'save-student-expenses': '학생용 체험처/비용을 저장했습니다.',
+    'save-staff-expenses': '인솔자용 체험처/비용을 저장했습니다.',
+    'save-report': '리포트 메모를 저장했습니다.'
+  };
 
-  if (action === 'save-budget' && form) {
-    saveProject(form, '예산 정보를 저장했습니다.');
-    return;
-  }
-
-  if (action === 'save-student-expenses' && form) {
-    saveProject(form, '학생용 체험처/비용을 저장했습니다.');
-    return;
-  }
-
-  if (action === 'save-staff-expenses' && form) {
-    saveProject(form, '인솔자용 체험처/비용을 저장했습니다.');
+  if (saveActions[action] && form) {
+    saveProject(form, saveActions[action]);
     return;
   }
 
@@ -198,7 +208,7 @@ main.addEventListener('click', event => {
     const project = getState().projects.find(item => item.id === currentPage.projectId);
     if (!project) return;
     const kind = button.dataset.expenseKind === 'staff' ? 'staff' : 'student';
-    addExpenseRow(tbody, project, form?.elements.startDate?.value ?? '', kind);
+    addExpenseRow(tbody, project, form?.elements.startDate?.value ?? project.startDate ?? '', kind);
     dirty = true;
     return;
   }
@@ -269,7 +279,7 @@ main.addEventListener('click', event => {
       state.projects = state.projects.filter(item => item.id !== currentPage.projectId);
     });
     persistState();
-    currentPage = { type: 'school', projectId: null };
+    currentPage = { type: 'school', projectId: null, section: null };
     render();
   }
 });
@@ -301,7 +311,7 @@ importInput.addEventListener('change', async () => {
     }
     replaceState(parsed);
     persistState();
-    currentPage = { type: 'school', projectId: null };
+    currentPage = { type: 'school', projectId: null, section: null };
     render();
     showMessage('저장 파일을 불러왔습니다.');
   } catch {
