@@ -57,7 +57,7 @@ test('기존 비용 데이터는 학생용으로 유지하고 인솔자용 배�
     }]
   });
 
-  assert.equal(state.schemaVersion, 3);
+  assert.equal(state.schemaVersion, 4);
   assert.equal(state.projects[0].expenses.length, 1);
   assert.equal(state.projects[0].expenses[0].id, 'student-expense');
   assert.deepEqual(state.projects[0].staffExpenses, []);

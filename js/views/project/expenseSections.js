@@ -6,7 +6,7 @@ export function renderStudentExpenseSection(project) {
       <legend>체험처/비용(학생용)</legend>
       <button type="button" class="section-save" data-action="save-student-expenses">저장</button>
       <div class="section-note expense-guide">
-        <p>일정별 체험처와 금액 등을 입력해 주세요. 세부정보를 입력하면 안내자료 생성 기능에 사용할 수 있습니다.</p>
+        <p>사업정보에서 저장한 체험학습 일정이 먼저 자동으로 반영됩니다. 반영된 일정에 계산방법, 단가, 실제 지출액 등을 입력해 주세요.</p>
         <p>대상인원의 경우 참가 학생별 결제를 하는 곳(식당, 공연 등)은 1인당 금액으로 설정하세요.</p>
         <p>학생 전체가 통합 금액을 지불하는 곳(호텔, 유스호스텔 등)은 학생 총액으로 설정하세요.</p>
         <p>인솔자를 포함한 전체 인원이 금액을 지불하는 곳(버스비 등)은 학생+인솔자 총액으로 설정하세요.</p>

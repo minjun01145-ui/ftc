@@ -1,6 +1,8 @@
 import { PROJECT_SECTION, normalizeProjectSection } from './projectSections.js';
 import { createProject } from './presets.js';
+import { validateScheduleFiles } from './services/scheduleUpload.js';
 import { getState, persistState, replaceState, updateState } from './state.js';
+import { syncExpensesFromTripSchedule } from './tripSchedule.js';
 import { downloadJson } from './utils.js';
 import {
   addExpenseRow,
@@ -16,6 +18,7 @@ import {
   updateExpenseRowButtons
 } from './views/expenseTable.js';
 import { readProjectForm, renderProjectPage } from './views/projectView.js';
+import { readTripScheduleSection, setTripScheduleEditing, updateTripScheduleUploadStatus } from './views/project/tripScheduleSection.js';
 import { renderProjectList } from './views/sidebarView.js';
 import { readSchoolForm, renderSchoolPage } from './views/schoolView.js';
 
@@ -31,7 +34,7 @@ let currentPage = { type: 'school', projectId: null, section: null };
 let dirty = false;
 let messageTimer;
 
-function projectPage(projectId, section = PROJECT_SECTION.OVERVIEW) {
+function projectPage(projectId, section = PROJECT_SECTION.BUSINESS) {
   return { type: 'project', projectId, section: normalizeProjectSection(section) };
 }
 
@@ -100,6 +103,28 @@ function saveProject(form, messageText = '저장했습니다.') {
   showMessage(messageText);
 }
 
+function saveTripSchedule(form) {
+  const state = getState();
+  const project = state.projects.find(item => item.id === currentPage.projectId);
+  const section = form.querySelector('[data-trip-schedule-section]');
+  if (!project || !section) return;
+
+  const tripSchedule = readTripScheduleSection(section, project.tripSchedule);
+  const expenses = syncExpensesFromTripSchedule(tripSchedule, project.expenses);
+  updateState(next => {
+    const index = next.projects.findIndex(item => item.id === currentPage.projectId);
+    if (index < 0) return;
+    next.projects[index] = {
+      ...next.projects[index],
+      tripSchedule,
+      expenses
+    };
+  });
+  persistState();
+  render();
+  showMessage('체험학습 일정을 저장하고 체험처/비용에 반영했습니다.');
+}
+
 function goTo(page) {
   if (!canDiscardChanges()) return;
   currentPage = page;
@@ -115,7 +140,7 @@ projectList.addEventListener('click', event => {
   if (!button) return;
 
   const projectId = button.dataset.projectId;
-  const requestedSection = button.dataset.projectSection ?? PROJECT_SECTION.OVERVIEW;
+  const requestedSection = button.dataset.projectSection ?? PROJECT_SECTION.BUSINESS;
   const nextPage = projectPage(projectId, requestedSection);
 
   if (currentPage.type === 'project'
@@ -145,8 +170,10 @@ main.addEventListener('submit', event => {
 });
 
 main.addEventListener('input', event => {
-  dirty = true;
   const target = event.target;
+  if (target.matches('[data-trip-schedule-upload]')) return;
+
+  dirty = true;
   if (target.dataset.detailField !== undefined) {
     const editor = target.closest('[data-expense-detail-editor]');
     const tbody = target.closest('tbody');
@@ -155,8 +182,14 @@ main.addEventListener('input', event => {
 });
 
 main.addEventListener('change', event => {
-  dirty = true;
   const target = event.target;
+
+  if (target.matches('[data-trip-schedule-upload]')) {
+    updateTripScheduleUploadStatus(target, validateScheduleFiles(target.files));
+    return;
+  }
+
+  dirty = true;
 
   if (target.name === 'vulnerableFullSupport') {
     const form = target.form;
@@ -189,6 +222,16 @@ main.addEventListener('click', event => {
   const tbody = expenseSection?.querySelector('[data-expense-table]');
   const row = button.closest('[data-expense-row]');
   const expenseId = row?.dataset.expenseId ?? button.dataset.expenseId ?? '';
+
+  if (action === 'edit-trip-schedule') {
+    setTripScheduleEditing(button.closest('[data-trip-schedule-section]'), true);
+    return;
+  }
+
+  if (action === 'save-trip-schedule' && form) {
+    saveTripSchedule(form);
+    return;
+  }
 
   const saveActions = {
     'save-business': '사업정보를 저장했습니다.',

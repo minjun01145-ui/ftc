@@ -1,0 +1,596 @@
+diff -ruN base/js/app.js new/js/app.js
+--- base/js/app.js	2026-09-17 11:10:11.607678271 +0000
++++ new/js/app.js	2026-09-17 11:10:11.609493937 +0000
+@@ -1,6 +1,8 @@
+ import { PROJECT_SECTION, normalizeProjectSection } from './projectSections.js';
+ import { createProject } from './presets.js';
++import { validateScheduleFiles } from './services/scheduleUpload.js';
+ import { getState, persistState, replaceState, updateState } from './state.js';
++import { syncExpensesFromTripSchedule } from './tripSchedule.js';
+ import { downloadJson } from './utils.js';
+ import {
+   addExpenseRow,
+@@ -16,6 +18,7 @@
+   updateExpenseRowButtons
+ } from './views/expenseTable.js';
+ import { readProjectForm, renderProjectPage } from './views/projectView.js';
++import { readTripScheduleSection, setTripScheduleEditing, updateTripScheduleUploadStatus } from './views/project/tripScheduleSection.js';
+ import { renderProjectList } from './views/sidebarView.js';
+ import { readSchoolForm, renderSchoolPage } from './views/schoolView.js';
+ 
+@@ -31,7 +34,7 @@
+ let dirty = false;
+ let messageTimer;
+ 
+-function projectPage(projectId, section = PROJECT_SECTION.OVERVIEW) {
++function projectPage(projectId, section = PROJECT_SECTION.BUSINESS) {
+   return { type: 'project', projectId, section: normalizeProjectSection(section) };
+ }
+ 
+@@ -100,6 +103,28 @@
+   showMessage(messageText);
+ }
+ 
++function saveTripSchedule(form) {
++  const state = getState();
++  const project = state.projects.find(item => item.id === currentPage.projectId);
++  const section = form.querySelector('[data-trip-schedule-section]');
++  if (!project || !section) return;
++
++  const tripSchedule = readTripScheduleSection(section, project.tripSchedule);
++  const expenses = syncExpensesFromTripSchedule(tripSchedule, project.expenses);
++  updateState(next => {
++    const index = next.projects.findIndex(item => item.id === currentPage.projectId);
++    if (index < 0) return;
++    next.projects[index] = {
++      ...next.projects[index],
++      tripSchedule,
++      expenses
++    };
++  });
++  persistState();
++  render();
++  showMessage('체험학습 일정을 저장하고 체험처/비용에 반영했습니다.');
++}
++
+ function goTo(page) {
+   if (!canDiscardChanges()) return;
+   currentPage = page;
+@@ -115,7 +140,7 @@
+   if (!button) return;
+ 
+   const projectId = button.dataset.projectId;
+-  const requestedSection = button.dataset.projectSection ?? PROJECT_SECTION.OVERVIEW;
++  const requestedSection = button.dataset.projectSection ?? PROJECT_SECTION.BUSINESS;
+   const nextPage = projectPage(projectId, requestedSection);
+ 
+   if (currentPage.type === 'project'
+@@ -145,8 +170,10 @@
+ });
+ 
+ main.addEventListener('input', event => {
+-  dirty = true;
+   const target = event.target;
++  if (target.matches('[data-trip-schedule-upload]')) return;
++
++  dirty = true;
+   if (target.dataset.detailField !== undefined) {
+     const editor = target.closest('[data-expense-detail-editor]');
+     const tbody = target.closest('tbody');
+@@ -155,9 +182,15 @@
+ });
+ 
+ main.addEventListener('change', event => {
+-  dirty = true;
+   const target = event.target;
+ 
++  if (target.matches('[data-trip-schedule-upload]')) {
++    updateTripScheduleUploadStatus(target, validateScheduleFiles(target.files));
++    return;
++  }
++
++  dirty = true;
++
+   if (target.name === 'vulnerableFullSupport') {
+     const form = target.form;
+     const amount = form?.elements.vulnerablePerPerson;
+@@ -190,6 +223,16 @@
+   const row = button.closest('[data-expense-row]');
+   const expenseId = row?.dataset.expenseId ?? button.dataset.expenseId ?? '';
+ 
++  if (action === 'edit-trip-schedule') {
++    setTripScheduleEditing(button.closest('[data-trip-schedule-section]'), true);
++    return;
++  }
++
++  if (action === 'save-trip-schedule' && form) {
++    saveTripSchedule(form);
++    return;
++  }
++
+   const saveActions = {
+     'save-business': '사업정보를 저장했습니다.',
+     'save-headcount': '인원 정보를 저장했습니다.',
+diff -ruN base/js/presets.js new/js/presets.js
+--- base/js/presets.js	2026-09-17 11:10:11.616359842 +0000
++++ new/js/presets.js	2026-09-17 11:10:11.618103019 +0000
+@@ -3,6 +3,7 @@
+ export function createExpense(overrides = {}) {
+   return {
+     id: uid('expense'),
++    sourceScheduleItemId: null,
+     date: '',
+     name: '',
+     calcMethod: 'perPerson',
+@@ -23,12 +24,28 @@
+   };
+ }
+ 
++export function createTripScheduleItem(overrides = {}) {
++  return {
++    id: uid('schedule'),
++    date: '',
++    name: '',
++    arrivalTime: '',
++    departureTime: '',
++    address: '',
++    contact: '',
++    ...overrides
++  };
++}
++
+ export function createProject(title = '새 사업') {
+   return {
+     id: uid('project'),
+     title,
+     startDate: '',
+     endDate: '',
++    tripSchedule: {
++      items: []
++    },
+     totalStudents: 0,
+     actualParticipants: 0,
+     absentStudents: 0,
+@@ -53,7 +70,7 @@
+ }
+ 
+ export const defaultState = {
+-  schemaVersion: 3,
++  schemaVersion: 4,
+   school: {
+     name: '',
+     homepage: '',
+@@ -72,6 +89,7 @@
+     ...base,
+     ...source,
+     id: String(source.id || base.id),
++    sourceScheduleItemId: source.sourceScheduleItemId ? String(source.sourceScheduleItemId) : null,
+     date: String(source.date ?? ''),
+     name: String(source.name ?? ''),
+     calcMethod: ['perPerson', 'fixedStudent', 'sharedFixed'].includes(source.calcMethod) ? source.calcMethod : 'perPerson',
+@@ -91,6 +109,29 @@
+   };
+ }
+ 
++function normalizeTripScheduleItem(item) {
++  const base = createTripScheduleItem();
++  const source = item && typeof item === 'object' ? item : {};
++  return {
++    ...base,
++    ...source,
++    id: String(source.id || base.id),
++    date: String(source.date ?? ''),
++    name: String(source.name ?? ''),
++    arrivalTime: String(source.arrivalTime ?? ''),
++    departureTime: String(source.departureTime ?? ''),
++    address: String(source.address ?? ''),
++    contact: String(source.contact ?? '')
++  };
++}
++
++function normalizeTripSchedule(value) {
++  const source = value && typeof value === 'object' ? value : {};
++  return {
++    items: Array.isArray(source.items) ? source.items.map(normalizeTripScheduleItem) : []
++  };
++}
++
+ function normalizeProject(project) {
+   const source = project && typeof project === 'object' ? project : {};
+   const base = createProject(String(source.title ?? '새 사업'));
+@@ -109,6 +150,7 @@
+     title: String(source.title ?? base.title),
+     startDate: String(source.startDate ?? ''),
+     endDate: String(source.endDate ?? ''),
++    tripSchedule: normalizeTripSchedule(source.tripSchedule),
+     totalStudents: Math.max(0, number(source.totalStudents)),
+     actualParticipants: Math.max(0, number(source.actualParticipants)),
+     absentStudents: Math.max(0, number(source.absentStudents)),
+@@ -142,7 +184,7 @@
+   const source = value && typeof value === 'object' ? value : {};
+   const school = source.school && typeof source.school === 'object' ? source.school : {};
+   return {
+-    schemaVersion: 3,
++    schemaVersion: 4,
+     school: {
+       ...clone(defaultState.school),
+       ...school,
+diff -ruN base/js/services/scheduleUpload.js new/js/services/scheduleUpload.js
+--- base/js/services/scheduleUpload.js	1970-01-01 00:00:00.000000000 +0000
++++ new/js/services/scheduleUpload.js	2026-09-17 11:10:11.677697536 +0000
+@@ -0,0 +1,19 @@
++export const TRIP_SCHEDULE_FILE_ACCEPT = '.pdf,.jpg,.jpeg,application/pdf,image/jpeg';
++
++const ALLOWED_MIME_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/jpg']);
++const ALLOWED_FILE_NAME = /\.(pdf|jpe?g)$/i;
++
++export function isSupportedScheduleFile(file) {
++  if (!file) return false;
++  const type = String(file.type ?? '').toLowerCase();
++  const name = String(file.name ?? '');
++  return ALLOWED_MIME_TYPES.has(type) || ALLOWED_FILE_NAME.test(name);
++}
++
++export function validateScheduleFiles(fileList) {
++  const files = Array.from(fileList ?? []);
++  return {
++    accepted: files.filter(isSupportedScheduleFile),
++    rejected: files.filter(file => !isSupportedScheduleFile(file))
++  };
++}
+diff -ruN base/js/tripSchedule.js new/js/tripSchedule.js
+--- base/js/tripSchedule.js	1970-01-01 00:00:00.000000000 +0000
++++ new/js/tripSchedule.js	2026-09-17 11:10:11.671973034 +0000
+@@ -0,0 +1,58 @@
++import { createExpense } from './presets.js';
++
++function scheduleDetails(item) {
++  return {
++    arrivalTime: String(item.arrivalTime ?? ''),
++    departureTime: String(item.departureTime ?? ''),
++    address: String(item.address ?? ''),
++    contact: String(item.contact ?? '')
++  };
++}
++
++function scheduleItemIsUsable(item) {
++  return String(item?.id ?? '').trim() !== ''
++    && (String(item?.date ?? '').trim() !== '' || String(item?.name ?? '').trim() !== '');
++}
++
++export function syncExpensesFromTripSchedule(tripSchedule, previousExpenses = []) {
++  const scheduleItems = Array.isArray(tripSchedule?.items) ? tripSchedule.items : [];
++  const expenses = Array.isArray(previousExpenses) ? previousExpenses : [];
++  const linkedByScheduleId = new Map(
++    expenses
++      .filter(expense => expense.sourceScheduleItemId)
++      .map(expense => [String(expense.sourceScheduleItemId), expense])
++  );
++  const manualExpenses = expenses.filter(expense => !expense.sourceScheduleItemId);
++  const seenScheduleIds = new Set();
++
++  const syncedExpenses = scheduleItems
++    .filter(scheduleItemIsUsable)
++    .filter(item => {
++      const id = String(item.id);
++      if (seenScheduleIds.has(id)) return false;
++      seenScheduleIds.add(id);
++      return true;
++    })
++    .map(item => {
++      const sourceScheduleItemId = String(item.id);
++      const previous = linkedByScheduleId.get(sourceScheduleItemId);
++      const scheduleValues = {
++        sourceScheduleItemId,
++        date: String(item.date ?? ''),
++        name: String(item.name ?? ''),
++        details: scheduleDetails(item)
++      };
++
++      if (!previous) return createExpense(scheduleValues);
++      return {
++        ...previous,
++        ...scheduleValues,
++        details: {
++          ...(previous.details ?? {}),
++          ...scheduleValues.details
++        }
++      };
++    });
++
++  return [...syncedExpenses, ...manualExpenses];
++}
+diff -ruN base/js/views/project/expenseSections.js new/js/views/project/expenseSections.js
+--- base/js/views/project/expenseSections.js	2026-09-17 11:10:11.650167166 +0000
++++ new/js/views/project/expenseSections.js	2026-09-17 11:10:11.652873199 +0000
+@@ -6,7 +6,7 @@
+       <legend>체험처/비용(학생용)</legend>
+       <button type="button" class="section-save" data-action="save-student-expenses">저장</button>
+       <div class="section-note expense-guide">
+-        <p>일정별 체험처와 금액 등을 입력해 주세요. 세부정보를 입력하면 안내자료 생성 기능에 사용할 수 있습니다.</p>
++        <p>사업정보에서 저장한 체험학습 일정이 먼저 자동으로 반영됩니다. 반영된 일정에 계산방법, 단가, 실제 지출액 등을 입력해 주세요.</p>
+         <p>대상인원의 경우 참가 학생별 결제를 하는 곳(식당, 공연 등)은 1인당 금액으로 설정하세요.</p>
+         <p>학생 전체가 통합 금액을 지불하는 곳(호텔, 유스호스텔 등)은 학생 총액으로 설정하세요.</p>
+         <p>인솔자를 포함한 전체 인원이 금액을 지불하는 곳(버스비 등)은 학생+인솔자 총액으로 설정하세요.</p>
+diff -ruN base/js/views/project/tripScheduleSection.js new/js/views/project/tripScheduleSection.js
+--- base/js/views/project/tripScheduleSection.js	1970-01-01 00:00:00.000000000 +0000
++++ new/js/views/project/tripScheduleSection.js	2026-09-17 11:10:11.684033278 +0000
+@@ -0,0 +1,107 @@
++import { TRIP_SCHEDULE_FILE_ACCEPT } from '../../services/scheduleUpload.js';
++import { escapeHtml } from '../../utils.js';
++
++function scheduleRowHtml(item) {
++  return `
++    <tr data-trip-schedule-row data-schedule-item-id="${escapeHtml(item.id)}">
++      <td><input type="date" data-schedule-field="date" value="${escapeHtml(item.date)}" readonly></td>
++      <td><input type="text" data-schedule-field="name" value="${escapeHtml(item.name)}" readonly></td>
++      <td><input type="time" data-schedule-field="arrivalTime" value="${escapeHtml(item.arrivalTime)}" readonly></td>
++      <td><input type="time" data-schedule-field="departureTime" value="${escapeHtml(item.departureTime)}" readonly></td>
++      <td><input type="text" data-schedule-field="address" value="${escapeHtml(item.address)}" readonly></td>
++      <td><input type="text" data-schedule-field="contact" value="${escapeHtml(item.contact)}" readonly></td>
++    </tr>`;
++}
++
++function scheduleRowsHtml(items) {
++  if (!items.length) {
++    return '<tr data-trip-schedule-empty><td colspan="6" class="center">일정 파일을 업로드하면 자동 입력된 계획이 여기에 표시됩니다.</td></tr>';
++  }
++  return items.map(scheduleRowHtml).join('');
++}
++
++export function renderTripScheduleSection(project) {
++  const items = Array.isArray(project.tripSchedule?.items) ? project.tripSchedule.items : [];
++  const hasItems = items.length > 0;
++
++  return `
++    <fieldset class="section-fieldset trip-schedule-section" data-project-section="business" data-trip-schedule-section>
++      <legend>체험학습 일정 입력</legend>
++      <p class="section-note">체험학습의 전체 일정을 업로드해 주세요. 자동으로 계획을 입력합니다</p>
++      <div class="toolbar">
++        <input type="file" accept="${TRIP_SCHEDULE_FILE_ACCEPT}" multiple data-trip-schedule-upload>
++        <span class="help" data-trip-schedule-upload-status>PDF 또는 JPG 파일을 선택할 수 있습니다.</span>
++        <span class="spacer"></span>
++        <button type="button" data-action="edit-trip-schedule" ${hasItems ? '' : 'disabled'}>수정</button>
++        <button type="button" data-action="save-trip-schedule" ${hasItems ? '' : 'disabled'}>저장</button>
++      </div>
++      <div class="table-wrap">
++        <table class="trip-schedule-table">
++          <thead>
++            <tr><th>일자</th><th>일정/체험처</th><th>도착 시간</th><th>나가는 시간</th><th>주소</th><th>관계자 연락처</th></tr>
++          </thead>
++          <tbody>${scheduleRowsHtml(items)}</tbody>
++        </table>
++      </div>
++    </fieldset>`;
++}
++
++export function setTripScheduleEditing(section, editing) {
++  if (!section) return;
++  section.dataset.editing = editing ? 'true' : 'false';
++  section.querySelectorAll('[data-schedule-field]').forEach(input => {
++    input.readOnly = !editing;
++  });
++
++  const editButton = section.querySelector('[data-action="edit-trip-schedule"]');
++  if (editButton) {
++    editButton.disabled = editing;
++    editButton.textContent = editing ? '수정 중' : '수정';
++  }
++}
++
++export function readTripScheduleSection(section, previousSchedule = { items: [] }) {
++  const previousItems = Array.isArray(previousSchedule?.items) ? previousSchedule.items : [];
++  const previousById = new Map(previousItems.map(item => [String(item.id), item]));
++  const rows = [...section.querySelectorAll('[data-trip-schedule-row]')];
++
++  return {
++    items: rows.map(row => {
++      const id = String(row.dataset.scheduleItemId ?? '');
++      const previous = previousById.get(id) ?? { id };
++      const value = field => row.querySelector(`[data-schedule-field="${field}"]`)?.value ?? '';
++      return {
++        ...previous,
++        id,
++        date: value('date'),
++        name: value('name').trim(),
++        arrivalTime: value('arrivalTime'),
++        departureTime: value('departureTime'),
++        address: value('address').trim(),
++        contact: value('contact').trim()
++      };
++    })
++  };
++}
++
++export function updateTripScheduleUploadStatus(input, validation) {
++  const section = input.closest('[data-trip-schedule-section]');
++  const status = section?.querySelector('[data-trip-schedule-upload-status]');
++  if (!status) return;
++
++  status.classList.remove('error-text');
++  if (validation.rejected.length) {
++    status.textContent = 'PDF 또는 JPG 파일만 업로드할 수 있습니다.';
++    status.classList.add('error-text');
++    input.value = '';
++    return;
++  }
++
++  if (!validation.accepted.length) {
++    status.textContent = 'PDF 또는 JPG 파일을 선택할 수 있습니다.';
++    return;
++  }
++
++  const names = validation.accepted.map(file => file.name).join(', ');
++  status.textContent = `선택됨: ${names} · 일정 자동 읽기는 AI 연동 단계에서 연결됩니다.`;
++}
+diff -ruN base/js/views/projectView.js new/js/views/projectView.js
+--- base/js/views/projectView.js	2026-09-17 11:10:11.626780330 +0000
++++ new/js/views/projectView.js	2026-09-17 11:10:11.629289219 +0000
+@@ -7,10 +7,15 @@
+ import { renderHeadcountSection } from './project/headcountSection.js';
+ import { renderReportSection } from './project/reportSection.js';
+ import { renderSettlementSection } from './project/settlementSection.js';
++import { renderTripScheduleSection } from './project/tripScheduleSection.js';
++
++function renderBusinessSections(project, school) {
++  return `${renderBusinessInfoSection(project, school)}${renderTripScheduleSection(project)}`;
++}
+ 
+ function renderOverview(project, school) {
+   return `
+-    ${renderBusinessInfoSection(project, school)}
++    ${renderBusinessSections(project, school)}
+     ${renderHeadcountSection(project)}
+     ${renderExpenseSections(project)}
+     ${renderBudgetSection(project)}
+@@ -25,7 +30,7 @@
+ function renderSection(project, school, section) {
+   switch (section) {
+     case PROJECT_SECTION.BUSINESS:
+-      return renderBusinessInfoSection(project, school);
++      return renderBusinessSections(project, school);
+     case PROJECT_SECTION.HEADCOUNT:
+       return renderHeadcountSection(project);
+     case PROJECT_SECTION.EXPENSES:
+@@ -42,7 +47,7 @@
+   }
+ }
+ 
+-export function renderProjectPage(project, school, requestedSection = PROJECT_SECTION.OVERVIEW) {
++export function renderProjectPage(project, school, requestedSection = PROJECT_SECTION.BUSINESS) {
+   const section = normalizeProjectSection(requestedSection);
+   return `
+     <h1>${escapeHtml(project.title)}</h1>
+diff -ruN base/js/views/sidebarView.js new/js/views/sidebarView.js
+--- base/js/views/sidebarView.js	2026-09-17 11:10:11.639414454 +0000
++++ new/js/views/sidebarView.js	2026-09-17 11:10:11.641226428 +0000
+@@ -1,4 +1,4 @@
+-import { PROJECT_SECTION_ITEMS } from '../projectSections.js';
++import { PROJECT_SECTION, PROJECT_SECTION_ITEMS } from '../projectSections.js';
+ import { escapeHtml } from '../utils.js';
+ 
+ export function renderProjectList(projects, currentPage) {
+@@ -19,6 +19,7 @@
+         <button type="button"
+           class="project-item ${activeProject ? 'active' : ''}"
+           data-project-id="${escapeHtml(project.id)}"
++          data-project-section="${PROJECT_SECTION.BUSINESS}"
+           aria-expanded="${activeProject ? 'true' : 'false'}">${escapeHtml(project.title)}</button>
+         ${submenu}
+       </div>`;
+diff -ruN base/tests/model.test.mjs new/tests/model.test.mjs
+--- base/tests/model.test.mjs	2026-09-17 11:10:11.662567155 +0000
++++ new/tests/model.test.mjs	2026-09-17 11:10:11.664718562 +0000
+@@ -57,7 +57,7 @@
+     }]
+   });
+ 
+-  assert.equal(state.schemaVersion, 3);
++  assert.equal(state.schemaVersion, 4);
+   assert.equal(state.projects[0].expenses.length, 1);
+   assert.equal(state.projects[0].expenses[0].id, 'student-expense');
+   assert.deepEqual(state.projects[0].staffExpenses, []);
+diff -ruN base/tests/trip-schedule.test.mjs new/tests/trip-schedule.test.mjs
+--- base/tests/trip-schedule.test.mjs	1970-01-01 00:00:00.000000000 +0000
++++ new/tests/trip-schedule.test.mjs	2026-09-17 11:10:11.689610356 +0000
+@@ -0,0 +1,100 @@
++import assert from 'node:assert/strict';
++import test from 'node:test';
++import { createExpense, createTripScheduleItem, normalizeState } from '../js/presets.js';
++import { validateScheduleFiles } from '../js/services/scheduleUpload.js';
++import { syncExpensesFromTripSchedule } from '../js/tripSchedule.js';
++import { renderTripScheduleSection } from '../js/views/project/tripScheduleSection.js';
++import { renderProjectList } from '../js/views/sidebarView.js';
++
++const scheduleItem = createTripScheduleItem({
++  id: 'schedule-1',
++  date: '2026-05-13',
++  name: '박물관',
++  arrivalTime: '10:00',
++  departureTime: '12:00',
++  address: '서울시 예시로 1'
++});
++
++test('기존 저장 데이터에는 빈 체험학습 일정 모델을 보완한다', () => {
++  const state = normalizeState({
++    schemaVersion: 3,
++    school: {},
++    projects: [{ title: '기존 사업', expenses: [{ id: 'expense-1', name: '차량비' }] }]
++  });
++
++  assert.equal(state.schemaVersion, 4);
++  assert.deepEqual(state.projects[0].tripSchedule, { items: [] });
++  assert.equal(state.projects[0].expenses[0].sourceScheduleItemId, null);
++});
++
++test('일정 저장 시 체험처/비용 행을 만들고 수동 비용은 보존한다', () => {
++  const manual = createExpense({ id: 'manual-1', name: '보험비', unitAmount: 1500 });
++  const expenses = syncExpensesFromTripSchedule({ items: [scheduleItem] }, [manual]);
++
++  assert.equal(expenses.length, 2);
++  assert.equal(expenses[0].sourceScheduleItemId, 'schedule-1');
++  assert.equal(expenses[0].name, '박물관');
++  assert.equal(expenses[0].details.arrivalTime, '10:00');
++  assert.equal(expenses[1].id, 'manual-1');
++});
++
++test('연결된 비용의 금액 입력은 유지하고 일정 정보만 갱신한다', () => {
++  const previous = createExpense({
++    id: 'expense-linked',
++    sourceScheduleItemId: 'schedule-1',
++    date: '2026-05-13',
++    name: '기존 체험처명',
++    unitAmount: 25000,
++    actualAmount: 24000,
++    details: { arrivalTime: '09:00', departureTime: '', address: '', contact: '' }
++  });
++  const changed = { ...scheduleItem, date: '2026-05-14', name: '수정된 체험처', arrivalTime: '11:00' };
++
++  const [expense] = syncExpensesFromTripSchedule({ items: [changed] }, [previous]);
++
++  assert.equal(expense.id, 'expense-linked');
++  assert.equal(expense.date, '2026-05-14');
++  assert.equal(expense.name, '수정된 체험처');
++  assert.equal(expense.unitAmount, 25000);
++  assert.equal(expense.actualAmount, 24000);
++  assert.equal(expense.details.arrivalTime, '11:00');
++});
++
++test('일정에서 삭제된 연결 행은 제거하지만 수동 행은 제거하지 않는다', () => {
++  const linked = createExpense({ id: 'linked', sourceScheduleItemId: 'schedule-old', name: '삭제된 일정' });
++  const manual = createExpense({ id: 'manual', name: '차량비' });
++
++  const expenses = syncExpensesFromTripSchedule({ items: [] }, [linked, manual]);
++
++  assert.deepEqual(expenses.map(item => item.id), ['manual']);
++});
++
++test('일정 업로드는 PDF와 JPG만 허용한다', () => {
++  const result = validateScheduleFiles([
++    { name: 'plan.pdf', type: 'application/pdf' },
++    { name: 'capture.JPG', type: 'image/jpeg' },
++    { name: 'capture.png', type: 'image/png' }
++  ]);
++
++  assert.deepEqual(result.accepted.map(file => file.name), ['plan.pdf', 'capture.JPG']);
++  assert.deepEqual(result.rejected.map(file => file.name), ['capture.png']);
++});
++
++test('사업정보 일정 화면은 업로드 안내와 읽기 전용 자동입력 미리보기를 제공한다', () => {
++  const html = renderTripScheduleSection({ tripSchedule: { items: [scheduleItem] } });
++
++  assert.match(html, /체험학습의 전체 일정을 업로드해 주세요\. 자동으로 계획을 입력합니다/);
++  assert.match(html, /accept="\.pdf,\.jpg,\.jpeg,application\/pdf,image\/jpeg"/);
++  assert.match(html, /data-schedule-field="name"[^>]*value="박물관"[^>]*readonly/);
++  assert.match(html, /data-action="edit-trip-schedule"/);
++  assert.match(html, /data-action="save-trip-schedule"/);
++});
++
++test('사업 상위 항목을 누르면 사업정보가 기본 목적지가 된다', () => {
++  const html = renderProjectList(
++    [{ id: 'project-1', title: '수학여행' }],
++    { type: 'school', projectId: null, section: null }
++  );
++
++  assert.match(html, /class="project-item [^"]*"[\s\S]*data-project-section="business"/);
++});

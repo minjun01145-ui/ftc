@@ -7,10 +7,15 @@ import { renderExpenseSections } from './project/expenseSections.js';
 import { renderHeadcountSection } from './project/headcountSection.js';
 import { renderReportSection } from './project/reportSection.js';
 import { renderSettlementSection } from './project/settlementSection.js';
+import { renderTripScheduleSection } from './project/tripScheduleSection.js';
+
+function renderBusinessSections(project, school) {
+  return `${renderBusinessInfoSection(project, school)}${renderTripScheduleSection(project)}`;
+}
 
 function renderOverview(project, school) {
   return `
-    ${renderBusinessInfoSection(project, school)}
+    ${renderBusinessSections(project, school)}
     ${renderHeadcountSection(project)}
     ${renderExpenseSections(project)}
     ${renderBudgetSection(project)}
@@ -25,7 +30,7 @@ function renderOverview(project, school) {
 function renderSection(project, school, section) {
   switch (section) {
     case PROJECT_SECTION.BUSINESS:
-      return renderBusinessInfoSection(project, school);
+      return renderBusinessSections(project, school);
     case PROJECT_SECTION.HEADCOUNT:
       return renderHeadcountSection(project);
     case PROJECT_SECTION.EXPENSES:
@@ -42,7 +47,7 @@ function renderSection(project, school, section) {
   }
 }
 
-export function renderProjectPage(project, school, requestedSection = PROJECT_SECTION.OVERVIEW) {
+export function renderProjectPage(project, school, requestedSection = PROJECT_SECTION.BUSINESS) {
   const section = normalizeProjectSection(requestedSection);
   return `
     <h1>${escapeHtml(project.title)}</h1>

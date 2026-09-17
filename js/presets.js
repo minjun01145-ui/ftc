@@ -3,6 +3,7 @@ import { clone, number, uid } from './utils.js';
 export function createExpense(overrides = {}) {
   return {
     id: uid('expense'),
+    sourceScheduleItemId: null,
     date: '',
     name: '',
     calcMethod: 'perPerson',
@@ -23,12 +24,28 @@ export function createExpense(overrides = {}) {
   };
 }
 
+export function createTripScheduleItem(overrides = {}) {
+  return {
+    id: uid('schedule'),
+    date: '',
+    name: '',
+    arrivalTime: '',
+    departureTime: '',
+    address: '',
+    contact: '',
+    ...overrides
+  };
+}
+
 export function createProject(title = '새 사업') {
   return {
     id: uid('project'),
     title,
     startDate: '',
     endDate: '',
+    tripSchedule: {
+      items: []
+    },
     totalStudents: 0,
     actualParticipants: 0,
     absentStudents: 0,
@@ -53,7 +70,7 @@ export function createProject(title = '새 사업') {
 }
 
 export const defaultState = {
-  schemaVersion: 3,
+  schemaVersion: 4,
   school: {
     name: '',
     homepage: '',
@@ -72,6 +89,7 @@ function normalizeExpense(expense) {
     ...base,
     ...source,
     id: String(source.id || base.id),
+    sourceScheduleItemId: source.sourceScheduleItemId ? String(source.sourceScheduleItemId) : null,
     date: String(source.date ?? ''),
     name: String(source.name ?? ''),
     calcMethod: ['perPerson', 'fixedStudent', 'sharedFixed'].includes(source.calcMethod) ? source.calcMethod : 'perPerson',
@@ -88,6 +106,29 @@ function normalizeExpense(expense) {
       address: String(source.details?.address ?? ''),
       contact: String(source.details?.contact ?? '')
     }
+  };
+}
+
+function normalizeTripScheduleItem(item) {
+  const base = createTripScheduleItem();
+  const source = item && typeof item === 'object' ? item : {};
+  return {
+    ...base,
+    ...source,
+    id: String(source.id || base.id),
+    date: String(source.date ?? ''),
+    name: String(source.name ?? ''),
+    arrivalTime: String(source.arrivalTime ?? ''),
+    departureTime: String(source.departureTime ?? ''),
+    address: String(source.address ?? ''),
+    contact: String(source.contact ?? '')
+  };
+}
+
+function normalizeTripSchedule(value) {
+  const source = value && typeof value === 'object' ? value : {};
+  return {
+    items: Array.isArray(source.items) ? source.items.map(normalizeTripScheduleItem) : []
   };
 }
 
@@ -109,6 +150,7 @@ function normalizeProject(project) {
     title: String(source.title ?? base.title),
     startDate: String(source.startDate ?? ''),
     endDate: String(source.endDate ?? ''),
+    tripSchedule: normalizeTripSchedule(source.tripSchedule),
     totalStudents: Math.max(0, number(source.totalStudents)),
     actualParticipants: Math.max(0, number(source.actualParticipants)),
     absentStudents: Math.max(0, number(source.absentStudents)),
@@ -142,7 +184,7 @@ export function normalizeState(value) {
   const source = value && typeof value === 'object' ? value : {};
   const school = source.school && typeof source.school === 'object' ? source.school : {};
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     school: {
       ...clone(defaultState.school),
       ...school,
