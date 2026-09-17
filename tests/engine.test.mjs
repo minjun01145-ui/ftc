@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { sampleProject } from '../js/presets.js';
-import { allocateFunding, calculateExpense, projectCounts, validateProject } from '../js/engine.js';
+import { createExpense, sampleProject } from '../js/presets.js';
+import { allocateFunding, calculateExpense, calculateStaffExpense, projectCounts, validateProject } from '../js/engine.js';
 
 test('기본 인원 계산', () => {
   const project = sampleProject();
@@ -54,4 +54,25 @@ test('취약계층 입력값이 참가자수보다 많으면 검증에서 잡는
 
   assert.ok(issues.some(issue => issue.includes('취약계층 참가학생수')));
   assert.ok(issues.some(issue => issue.includes('취약계층 불참자수')));
+});
+
+test('인솔자 전용 1인당 비용은 인솔자 수를 기준으로 계산한다', () => {
+  const project = sampleProject();
+  const expense = createExpense({ calcMethod: 'perPerson', unitAmount: 12000 });
+  assert.equal(calculateStaffExpense(expense, project, false).total, 96000);
+});
+
+test('인솔자 전용 정산액이 입력되면 실제 지출액을 사용한다', () => {
+  const project = sampleProject();
+  const expense = createExpense({ calcMethod: 'perPerson', unitAmount: 12000, actualAmount: 91000 });
+  assert.equal(calculateStaffExpense(expense, project, true).total, 91000);
+});
+
+test('공통 총액 방식의 인솔자 전용 계산은 학생 계산의 인솔자 몫과 일치한다', () => {
+  const project = sampleProject();
+  const expense = project.expenses[0];
+  assert.equal(
+    calculateStaffExpense(expense, project, false).total,
+    calculateExpense(expense, project, false).staffTotal
+  );
 });

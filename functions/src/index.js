@@ -2,7 +2,6 @@ import { setGlobalOptions } from 'firebase-functions/v2';
 import { onRequest } from 'firebase-functions/v2/https';
 import { logger } from 'firebase-functions';
 import {
-  AI_ALLOWED_ORIGINS,
   AI_PROVIDER_SECRETS,
   readAiRuntimeConfig
 } from './config/aiParams.js';
@@ -61,6 +60,3 @@ export const aiGateway = onRequest(
     }
   }
 );
-
-// import 시 사용되는 params가 트리쉐이킹되지 않도록 명시적으로 참조한다.
-void AI_ALLOWED_ORIGINS;

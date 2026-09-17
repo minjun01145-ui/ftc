@@ -38,6 +38,8 @@ python3 -m http.server 8000
 - 각 비용 항목에는 `도착 시간`, `나가는 시간`, `주소`, `관계자 연락처` 세부정보를 저장할 수 있습니다.
 - 세부정보는 향후 안내자료 생성 기능에서 재사용할 수 있도록 비용 계산값과 분리된 `details` 객체에 저장됩니다.
 
+현재 `allocateFunding()`의 학생 재원 배분은 `expenses`를 기준으로 하며, `staffExpenses`는 자동 합산하지 않습니다. 인솔자 전용 비용을 전체 행사비에 어떤 방식으로 반영할지는 기능 요구사항이 확정된 뒤 명시적으로 연결합니다.
+
 ## 파일 구조
 
 - `index.html` : 기본 레이아웃
@@ -46,16 +48,18 @@ python3 -m http.server 8000
 - `js/state.js` : 메모리 상태와 명시적 저장 처리
 - `js/storage.js` : localStorage 읽기/쓰기
 - `js/presets.js` : 데이터 기본값, 생성 함수, 이전 데이터 정규화
-- `js/engine.js` : 학생 비용 계산, 지원금 배분, 검증
+- `js/engine.js` : 학생·인솔자 비용 계산, 지원금 배분, 검증
 - `js/views/schoolView.js` : 기본정보 화면
 - `js/projectSections.js` : 사업 하위메뉴 키와 순서 정의
 - `js/views/sidebarView.js` : 사업 목록과 하위메뉴 렌더링
 - `js/views/projectView.js` : 선택된 하위메뉴 조합 및 부분 폼 병합 저장
 - `js/views/project/` : 사업정보, 인원, 비용, 예산, 리포트, 정산을 각각 독립 뷰 모듈로 관리
-- `js/views/expenseTable.js` : 학생·인솔자 비용표와 세부정보 처리
+- `js/views/expenseTable.js` : 학생·인솔자 비용표 렌더링과 DOM/폼 처리
 - `js/services/schoolInfo.js` : 추후 학교알리미 연동 위치
 - `js/ai/` : 향후 AI 프런트 연동 계층. 현재 화면에서는 사용하지 않음
 - `functions/` : 향후 Firebase Functions AI 게이트웨이 기반. Firebase 미연결 상태에서도 기존 프로그램에는 영향 없음
+
+개발 중 모듈 경계와 새 기능을 어디에 추가할지는 `DEVELOPMENT.md`를 참고합니다.
 
 ## 데이터 호환
 

@@ -116,6 +116,27 @@ export function calculateExpense(expense, project, settlement = false) {
   return { ...expense, studentQty, unit, studentTotal, staffTotal, total, cohortCosts };
 }
 
+// 인솔자 전용 비용표의 계산 규칙이다. DOM과 무관한 업무 규칙이므로 뷰가 아니라 엔진에 둔다.
+// 이 값은 현재 학생 재원 배분(allocateFunding)에는 자동 합산하지 않는다.
+export function calculateStaffExpense(expense, project, settlement = false) {
+  const chaperones = projectCounts(project).chaperones;
+  const actualEntered = settlement && expense.actualAmount !== null && expense.actualAmount !== '';
+
+  if (expense.calcMethod === 'sharedFixed') {
+    return { total: calculateExpense(expense, project, settlement).staffTotal };
+  }
+
+  if (actualEntered) {
+    return { total: Math.max(0, number(expense.actualAmount)) };
+  }
+
+  if (expense.calcMethod === 'fixedStudent') {
+    return { total: Math.max(0, number(expense.planAmount)) };
+  }
+
+  return { total: Math.max(0, number(expense.unitAmount)) * chaperones };
+}
+
 export function calculateExpenses(project, settlement = false) {
   const rows = project.expenses.map(expense => calculateExpense(expense, project, settlement));
   return {

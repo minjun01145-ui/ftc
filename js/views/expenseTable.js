@@ -1,4 +1,4 @@
-import { calculateExpense } from '../engine.js';
+import { calculateExpense, calculateStaffExpense } from '../engine.js';
 import { createExpense } from '../presets.js';
 import { escapeHtml, formatWon, number } from '../utils.js';
 
@@ -39,26 +39,6 @@ function detailsOf(expense) {
 
 export function hasExpenseDetails(expense) {
   return Object.values(detailsOf(expense)).some(value => value.trim() !== '');
-}
-
-function calculateStaffExpense(expense, project, settlement = false) {
-  const chaperones = Math.max(0, number(project.chaperones));
-  const actualEntered = settlement && expense.actualAmount !== null && expense.actualAmount !== '';
-
-  if (expense.calcMethod === 'sharedFixed') {
-    const calc = calculateExpense(expense, project, settlement);
-    return { total: calc.staffTotal };
-  }
-
-  if (actualEntered) {
-    return { total: Math.max(0, number(expense.actualAmount)) };
-  }
-
-  if (expense.calcMethod === 'fixedStudent') {
-    return { total: Math.max(0, number(expense.planAmount)) };
-  }
-
-  return { total: Math.max(0, number(expense.unitAmount)) * chaperones };
 }
 
 function detailEditorHtml(expense, colspan) {
@@ -265,7 +245,6 @@ function currentDetailValues(tbody, id) {
     contact: value('contact').trim()
   };
 }
-
 
 export function syncExpenseDetailAvailability(tbody, id) {
   const main = rowForId(tbody, id);
