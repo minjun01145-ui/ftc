@@ -34,11 +34,11 @@ HTML 생성, 폼 값 읽기, DOM 조작을 담당합니다.
 
 학교알리미처럼 외부 시스템과 통신하는 코드를 둡니다. 화면이 외부 API 형식을 직접 알지 않게 합니다.
 
-부산 학교 검색과 공시 학생수 조회는 `js/services/schoolInfo.js`에서 요청하고, Firebase Functions의 `functions/src/schoolData/`가 학교알리미 학교기본정보·학생수 응답을 화면에서 쓰는 정보로 정리합니다. 인증키는 Functions Secret Manager에만 보관합니다.
+부산 학교 검색과 공시 학생수 조회는 `js/services/schoolInfo.js`에서 요청하고, Firebase Functions의 학교 전용 `functions/src/schoolData/` 코드베이스가 학교알리미 학교기본정보·학생수 응답을 화면에서 쓰는 정보로 정리합니다. 학교 코드베이스는 `SCHOOL_DATA_API_KEYS`만 사용하고 AI 모듈·설정·시크릿을 가져오지 않습니다.
 
-### `js/ai/`, `functions/src/ai/`
+### `js/ai/`, `ai-functions/src/`
 
-AI는 기존 계산의 기준값을 대신하지 않습니다. `engine.js`가 만든 구조화된 값의 설명, 추천, 문서화 같은 보조 기능으로 붙이는 것을 기본 원칙으로 합니다.
+AI는 아직 배포하지 않은 별도 Firebase 코드베이스 `ai`에 둡니다. 학교 기능과 코드, 의존성, 환경변수, 시크릿을 공유하지 않습니다. AI는 기존 계산의 기준값을 대신하지 않고 `engine.js`가 만든 구조화된 값의 설명, 추천, 문서화 같은 보조 기능으로 붙이는 것을 기본 원칙으로 합니다.
 
 ## `staffExpenses` 주의점
 

@@ -22,7 +22,7 @@ python3 -m http.server 8000
 
 학교 목록은 학교알리미 OpenAPI의 학교기본정보를, 학생수는 `학년별·학급별 학생수` 항목을 사용합니다. 학교알리미 공시자료는 최근 3년만 제공되므로 조회할 공시연도도 최근 3년 범위여야 합니다.
 
-실제 Firebase 프로젝트 ID와 개인 API 키는 저장소에 기록하지 않습니다. 부산 학교 조회에는 학교알리미 키만 사용하며, NEIS 키는 필요하지 않습니다.
+실제 Firebase 프로젝트 ID와 개인 API 키는 저장소에 기록하지 않습니다. 부산 학교 조회에는 학교알리미 키만 사용하며, NEIS 키는 필요하지 않습니다. 학교 조회와 AI는 별도의 Firebase 코드베이스와 환경 설정으로 관리합니다.
 
 1. Firebase CLI에서 배포할 프로젝트를 선택합니다(`firebase use --add`). 저장소의 `.firebaserc.example`에는 예시용 ID만 있습니다.
 2. 학교알리미에서 OpenAPI 키를 발급합니다.
@@ -32,11 +32,15 @@ python3 -m http.server 8000
    {"schoolInfoApiKey":"학교알리미 키"}
    ```
 
-4. `functions/.env.example`을 `functions/.env.<프로젝트ID>`로 복사합니다. 예를 들어 프로젝트 ID가 `ftc1-6b064`이면 `functions/.env.ftc1-6b064`입니다. 이 파일은 Git에서 제외되며, 배포에 필요한 비밀이 아닌 기본 환경 설정을 제공합니다.
-5. `firebase deploy --only functions:schoolInfoGateway`로 함수를 배포합니다. CORS 허용 주소는 `AI_ALLOWED_ORIGINS` 설정을 사용합니다.
+4. `functions/.env.example`을 `functions/.env.<프로젝트ID>`로 복사합니다. 예를 들어 프로젝트 ID가 `ftc1-6b064`이면 `functions/.env.ftc1-6b064`입니다. 이 파일은 Git에서 제외되며 학교 조회의 허용 출처만 설정합니다.
+5. `firebase deploy --only functions:default`로 학교 조회 코드베이스만 배포합니다. AI 코드베이스는 이 배포에서 읽거나 변경하지 않습니다.
 6. 배포 명령이 출력한 HTTPS 함수 주소를 [schoolInfoConfig.js](js/services/schoolInfoConfig.js)의 `gatewayUrl`에 설정합니다. 현재 저장소에는 `ftc1-6b064` 프로젝트의 주소가 설정되어 있습니다.
 
 API 키는 Firebase Secret Manager에만 저장하며 프런트엔드 코드나 저장 파일에는 넣지 않습니다.
+
+### AI 게이트웨이 코드베이스 (미배포)
+
+AI 코드 골격은 `ai-functions/`의 `ai` 코드베이스에 따로 보관합니다. 현재 Firebase 프로젝트에는 AI 함수와 AI 시크릿이 배포되어 있지 않습니다. AI 기능을 구현할 때는 `ai-functions/.env.<프로젝트ID>`와 AI 전용 Secret Manager 키를 별도로 설정한 뒤 `firebase deploy --only functions:ai`로 배포합니다.
 
 사업을 선택하면 좌측에서 다음 하위메뉴를 사용할 수 있습니다.
 
@@ -80,8 +84,9 @@ API 키는 Firebase Secret Manager에만 저장하며 프런트엔드 코드나 
 - `js/services/schoolInfo.js` : 학교 검색·학생수 조회를 위한 프런트엔드 서비스
 - `js/services/schoolInfoConfig.js` : 학교 조회 Firebase Function 주소 설정
 - `js/ai/` : 향후 AI 프런트 연동 계층. 현재 화면에서는 사용하지 않음
-- `functions/src/schoolData/` : 학교알리미 학교 검색과 학생수 응답을 정규화하는 서버 모듈
-- `functions/` : 학교 공공데이터 프록시와 AI 게이트웨이. Firebase 미연결 상태에서도 기존 입력·저장 기능에는 영향 없음
+- `functions/src/schoolData/` : 학교 조회 코드베이스의 학교알리미 검색·학생수 응답 모듈
+- `functions/` : 학교 조회 전용 Firebase 코드베이스. AI 코드나 AI 시크릿을 참조하지 않음
+- `ai-functions/` : 아직 배포하지 않은 독립 AI 게이트웨이 코드베이스. 전용 환경변수와 Secret Manager 키를 사용
 
 개발 중 모듈 경계와 새 기능을 어디에 추가할지는 `DEVELOPMENT.md`를 참고합니다.
 
