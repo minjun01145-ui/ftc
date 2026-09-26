@@ -37,6 +37,18 @@ export async function searchSchools({ educationOffice, query = '' }) {
   return Array.isArray(result.schools) ? result.schools : [];
 }
 
-export async function getSchoolStudentCounts({ educationOffice, schoolCode, reportYear }) {
-  return requestSchoolData('studentCounts', { educationOffice, schoolCode, reportYear });
+export async function getSchoolStudentCounts({
+  educationOffice,
+  schoolCode,
+  schoolRegionCode,
+  schoolKindCode,
+  reportYear
+}) {
+  return requestSchoolData('studentCounts', {
+    educationOffice,
+    schoolCode,
+    schoolRegionCode,
+    schoolKindCode,
+    reportYear
+  });
 }

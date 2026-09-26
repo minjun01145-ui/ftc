@@ -16,26 +16,26 @@ python3 -m http.server 8000
 
 입력 중에는 상태 저장이나 전체 화면 재렌더링을 하지 않습니다. 한글 IME 조합과 숫자 입력 커서가 끊기지 않도록 사용자가 `저장`을 눌렀을 때만 화면 값을 상태에 반영합니다.
 
-학교 정보 화면에서 부산광역시의 교육지원청을 선택해 학교를 검색할 수 있습니다. 학교를 선택하면 나이스 학교정보로부터 학교명·홈페이지를 채우고, 학교알리미의 학년별·학급별 학생수 공시자료로 1~3학년 학생수를 불러옵니다. 학생수는 조회 후에도 직접 수정할 수 있으며, `저장`을 눌러야 브라우저에 반영됩니다. 페이지를 이동할 때 저장하지 않은 변경사항이 있으면 기존 확인창이 표시됩니다.
+학교 정보 화면에서 부산광역시의 교육지원청을 선택해 학교를 검색할 수 있습니다. 학교 검색과 1~3학년 학생수 조회 모두 학교알리미 OpenAPI를 사용합니다. 학생수는 조회 후에도 직접 수정할 수 있으며, `저장`을 눌러야 브라우저에 반영됩니다. 페이지를 이동할 때 저장하지 않은 변경사항이 있으면 기존 확인창이 표시됩니다.
 
 ### 부산 학교 조회 연결
 
-학교 목록은 나이스 교육정보 개방포털의 학교기본정보를 사용하고, 학생수는 학교알리미 OpenAPI의 `학년별·학급별 학생수` 항목을 사용합니다. 학교알리미 공시자료는 최근 3년만 제공되므로 조회할 공시연도도 최근 3년 범위여야 합니다.
+학교 목록은 학교알리미 OpenAPI의 학교기본정보를, 학생수는 `학년별·학급별 학생수` 항목을 사용합니다. 학교알리미 공시자료는 최근 3년만 제공되므로 조회할 공시연도도 최근 3년 범위여야 합니다.
 
-현재 저장소에는 Firebase 프로젝트 ID와 개인 API 키가 없으므로 배포 전에 다음 연결 설정이 필요합니다.
+실제 Firebase 프로젝트 ID와 개인 API 키는 저장소에 기록하지 않습니다. 배포할 프로젝트를 선택하고 API 키를 Secret Manager에 등록해야 합니다.
 
-1. Firebase CLI에서 배포할 프로젝트를 선택합니다(`firebase use --add`). 저장소의 `.firebaserc.example`에는 실제 프로젝트 ID가 없습니다.
-2. 나이스 교육정보 개방포털과 학교알리미에서 각각 OpenAPI 키를 발급합니다.
+1. Firebase CLI에서 배포할 프로젝트를 선택합니다(`firebase use --add`). 저장소의 `.firebaserc.example`에는 예시용 ID만 있습니다.
+2. 학교알리미에서 OpenAPI 키를 발급합니다.
 3. `firebase functions:secrets:set SCHOOL_DATA_API_KEYS`로 아래 JSON 형식의 시크릿을 등록합니다.
 
    ```json
-   {"neisApiKey":"나이스 키","schoolInfoApiKey":"학교알리미 키"}
+   {"schoolInfoApiKey":"학교알리미 키"}
    ```
 
 4. `firebase deploy --only functions:schoolInfoGateway`로 함수를 배포합니다. CORS 허용 주소는 기존 `AI_ALLOWED_ORIGINS` 설정을 함께 사용합니다.
 5. 배포된 HTTPS 함수 주소를 [schoolInfoConfig.js](js/services/schoolInfoConfig.js)의 `gatewayUrl`에 설정합니다.
 
-두 API 키는 Firebase Secret Manager에만 저장하며 프런트엔드 코드나 저장 파일에는 넣지 않습니다.
+API 키는 Firebase Secret Manager에만 저장하며 프런트엔드 코드나 저장 파일에는 넣지 않습니다.
 
 사업을 선택하면 좌측에서 다음 하위메뉴를 사용할 수 있습니다.
 
@@ -79,14 +79,14 @@ python3 -m http.server 8000
 - `js/services/schoolInfo.js` : 학교 검색·학생수 조회를 위한 프런트엔드 서비스
 - `js/services/schoolInfoConfig.js` : 학교 조회 Firebase Function 주소 설정
 - `js/ai/` : 향후 AI 프런트 연동 계층. 현재 화면에서는 사용하지 않음
-- `functions/src/schoolData/` : 나이스 학교 검색과 학교알리미 학생수 응답을 정규화하는 서버 모듈
+- `functions/src/schoolData/` : 학교알리미 학교 검색과 학생수 응답을 정규화하는 서버 모듈
 - `functions/` : 학교 공공데이터 프록시와 AI 게이트웨이. Firebase 미연결 상태에서도 기존 입력·저장 기능에는 영향 없음
 
 개발 중 모듈 경계와 새 기능을 어디에 추가할지는 `DEVELOPMENT.md`를 참고합니다.
 
 ## 데이터 호환
 
-현재 데이터 스키마 버전은 4입니다. 선택 학교를 기억하도록 교육지원청과 나이스 학교코드를 추가 저장하며, 기존 자료를 불러오면 빈 값으로 보완합니다. 이전 버전의 `expenses`는 학생용 비용으로 유지하며 `staffExpenses`와 체험처 세부정보 필드도 기본값으로 보완합니다.
+현재 데이터 스키마 버전은 4입니다. 선택 학교를 기억하도록 교육지원청, 학교알리미 코드와 학교 구분값을 추가 저장하며, 기존 자료를 불러오면 빈 값으로 보완합니다. 이전 버전의 `expenses`는 학생용 비용으로 유지하며 `staffExpenses`와 체험처 세부정보 필드도 기본값으로 보완합니다.
 
 ## 데이터 저장
 

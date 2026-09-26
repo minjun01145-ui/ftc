@@ -17,7 +17,7 @@ async function requestSchoolInfo(params, apiKey) {
   }
 
   if (!response.ok) {
-    throw new SchoolDataError(502, 'SCHOOLINFO_UNAVAILABLE', '학교알리미 학생수 조회에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+    throw new SchoolDataError(502, 'SCHOOLINFO_UNAVAILABLE', '학교알리미 학교 정보를 조회하지 못했습니다. 잠시 후 다시 시도해 주세요.');
   }
 
   let payload;

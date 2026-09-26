@@ -62,6 +62,8 @@ export function renderSchoolPage(school) {
           <span id="schoolInfoStatus" class="help" role="status" aria-live="polite">학교를 선택하면 공시 학생수를 자동으로 불러옵니다. 조회값은 확인 후 수정할 수 있습니다.</span>
         </div>
         <input type="hidden" name="schoolCode" value="${escapeHtml(school.schoolCode)}">
+        <input type="hidden" name="schoolRegionCode" value="${escapeHtml(school.schoolRegionCode)}">
+        <input type="hidden" name="schoolKindCode" value="${escapeHtml(school.schoolKindCode)}">
       </fieldset>
       <div class="page-actions"><button type="submit">저장</button></div>
     </form>
@@ -76,6 +78,8 @@ export function readSchoolForm(form, previous) {
     homepage: String(data.get('homepage') ?? '').trim(),
     educationOffice: String(data.get('educationOffice') ?? '').trim(),
     schoolCode: String(data.get('schoolCode') ?? '').trim(),
+    schoolRegionCode: String(data.get('schoolRegionCode') ?? '').trim(),
+    schoolKindCode: String(data.get('schoolKindCode') ?? '').trim(),
     schoolYear: Math.max(0, number(data.get('schoolYear'))),
     grade1Students: Math.max(0, number(data.get('grade1Students'))),
     grade2Students: Math.max(0, number(data.get('grade2Students'))),
