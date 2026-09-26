@@ -74,6 +74,8 @@ export const defaultState = {
   school: {
     name: '',
     homepage: '',
+    educationOffice: '',
+    schoolCode: '',
     schoolYear: new Date().getFullYear(),
     grade1Students: 0,
     grade2Students: 0,
@@ -190,6 +192,8 @@ export function normalizeState(value) {
       ...school,
       name: String(school.name ?? ''),
       homepage: String(school.homepage ?? ''),
+      educationOffice: String(school.educationOffice ?? ''),
+      schoolCode: String(school.schoolCode ?? ''),
       schoolYear: Math.max(0, number(school.schoolYear, new Date().getFullYear())),
       grade1Students: Math.max(0, number(school.grade1Students)),
       grade2Students: Math.max(0, number(school.grade2Students)),

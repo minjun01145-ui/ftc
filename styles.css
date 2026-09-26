@@ -93,7 +93,7 @@ legend { padding: 0 5px; font-weight: bold; }
   align-items: center;
 }
 .form-grid label { text-align: right; }
-input[type="text"], input[type="number"], input[type="date"], input[type="url"], select, textarea {
+input[type="text"], input[type="number"], input[type="date"], input[type="url"], input[type="search"], select, textarea {
   border: 1px solid #888;
   background: #fff;
   padding: 4px 5px;
@@ -108,6 +108,40 @@ textarea { width: 100%; min-height: 65px; resize: vertical; }
 .help { color: #555; font-size: 12px; }
 .error-text { color: #b00020; font-weight: bold; }
 .ok-text { color: #075a07; }
+
+.school-lookup-grid {
+  display: grid;
+  grid-template-columns: 150px minmax(240px, 1fr);
+  gap: 8px 10px;
+  align-items: center;
+  max-width: 760px;
+}
+.school-lookup-grid > label { text-align: right; }
+.school-search-controls { display: flex; gap: 6px; min-width: 0; }
+.school-search-controls input { flex: 1; min-width: 0; }
+.school-search-results {
+  display: grid;
+  gap: 4px;
+  max-width: 760px;
+  margin-top: 8px;
+}
+.school-search-results:empty { display: none; }
+.school-search-result {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: flex-start;
+  text-align: left;
+  background: #fff;
+}
+.school-search-result small { color: #555; }
+.school-info-lookup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
 
 .toolbar {
   display: flex;
@@ -183,12 +217,16 @@ table input[type="text"] { min-width: 150px; }
   #main { padding: 14px; }
   .form-grid { grid-template-columns: 130px minmax(180px, 1fr); }
   .form-grid label { text-align: left; }
+  .school-lookup-grid { grid-template-columns: 130px minmax(180px, 1fr); }
+  .school-lookup-grid > label { text-align: left; }
 }
 
 @media (max-width: 650px) {
   #layout { display: block; }
   #sidebar { width: 100%; min-width: 0; min-height: auto; border-right: 0; border-bottom: 1px solid #999; }
   .sidebar-bottom { margin-top: 0; }
+  .school-lookup-grid { grid-template-columns: 1fr; }
+  .school-search-controls { flex-direction: column; }
 }
 
 @media print {

@@ -1,9 +1,42 @@
-/**
- * 학교알리미 연동을 위한 교체 지점입니다.
- * GitHub Pages에 인증키를 직접 넣지 않기 위해 MVP에서는 호출하지 않습니다.
- * 추후 Cloudflare Worker 등의 서버리스 프록시에서 학교알리미 Open API를 호출한 뒤
- * 이 함수가 해당 프록시를 사용하도록 구현하면 됩니다.
- */
-export async function searchSchools() {
-  throw new Error('학교알리미 연동은 아직 설정되지 않았습니다. 현재 버전에서는 학교 정보를 직접 입력해 주세요.');
+import { schoolInfoConfig } from './schoolInfoConfig.js';
+
+async function requestSchoolData(action, payload) {
+  if (!schoolInfoConfig.gatewayUrl.trim()) {
+    throw new Error('학교 조회 서버 주소가 설정되지 않았습니다. js/services/schoolInfoConfig.js의 gatewayUrl을 설정해 주세요.');
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), schoolInfoConfig.requestTimeoutMs);
+  try {
+    const response = await fetch(schoolInfoConfig.gatewayUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, ...payload }),
+      signal: controller.signal
+    });
+    const result = await response.json().catch(() => null);
+    if (!response.ok || result?.ok !== true) {
+      throw new Error(result?.error?.message || '학교 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.');
+    }
+    return result;
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw new Error('학교 정보 조회 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.');
+    }
+    if (error instanceof TypeError) {
+      throw new Error('학교 조회 서버에 연결할 수 없습니다. 서버 주소와 배포 상태를 확인해 주세요.');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function searchSchools({ educationOffice, query = '' }) {
+  const result = await requestSchoolData('searchSchools', { educationOffice, query });
+  return Array.isArray(result.schools) ? result.schools : [];
+}
+
+export async function getSchoolStudentCounts({ educationOffice, schoolCode, reportYear }) {
+  return requestSchoolData('studentCounts', { educationOffice, schoolCode, reportYear });
 }

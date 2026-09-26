@@ -34,6 +34,8 @@ HTML 생성, 폼 값 읽기, DOM 조작을 담당합니다.
 
 학교알리미처럼 외부 시스템과 통신하는 코드를 둡니다. 화면이 외부 API 형식을 직접 알지 않게 합니다.
 
+부산 학교 검색과 공시 학생수 조회는 `js/services/schoolInfo.js`에서 요청하고, Firebase Functions의 `functions/src/schoolData/`가 나이스·학교알리미 응답을 화면에서 쓰는 학교 정보와 학생수로 정리합니다. 인증키는 Functions Secret Manager에만 보관합니다.
+
 ### `js/ai/`, `functions/src/ai/`
 
 AI는 기존 계산의 기준값을 대신하지 않습니다. `engine.js`가 만든 구조화된 값의 설명, 추천, 문서화 같은 보조 기능으로 붙이는 것을 기본 원칙으로 합니다.

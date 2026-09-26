@@ -1,10 +1,40 @@
 import { escapeHtml, number } from '../utils.js';
 
+const EDUCATION_OFFICES = [
+  ['seobu', '서부교육지원청'],
+  ['namBu', '남부교육지원청'],
+  ['bukbu', '북부교육지원청'],
+  ['dongnae', '동래교육지원청'],
+  ['haeundae', '해운대교육지원청']
+];
+
 export function renderSchoolPage(school) {
   const total = number(school.grade1Students) + number(school.grade2Students) + number(school.grade3Students);
+  const officeOptions = EDUCATION_OFFICES.map(([value, label]) => `
+    <option value="${value}" ${school.educationOffice === value ? 'selected' : ''}>${label}</option>
+  `).join('');
   return `
     <h1>기본정보</h1>
     <form id="schoolForm">
+      <fieldset>
+        <legend>학교 조회</legend>
+        <div class="school-lookup-grid">
+          <label for="educationOffice">교육지원청</label>
+          <select id="educationOffice" name="educationOffice">
+            <option value="">교육지원청 선택</option>
+            ${officeOptions}
+          </select>
+
+          <label for="schoolQuery">학교명 검색</label>
+          <div class="school-search-controls">
+            <input id="schoolQuery" name="schoolQuery" type="search" data-school-search autocomplete="off" placeholder="학교명을 입력하거나 비워 두고 검색하세요">
+            <button type="button" data-action="search-schools">학교 검색</button>
+          </div>
+        </div>
+        <p id="schoolSearchStatus" class="help" role="status" aria-live="polite">교육지원청을 선택한 뒤 학교를 검색하세요.</p>
+        <div id="schoolSearchResults" class="school-search-results" role="listbox" aria-label="학교 검색 결과"></div>
+      </fieldset>
+
       <fieldset>
         <legend>학교 정보</legend>
         <div class="form-grid">
@@ -25,10 +55,14 @@ export function renderSchoolPage(school) {
           <label for="grade3Students">3학년 학생수</label>
           <input id="grade3Students" name="grade3Students" type="number" min="0" value="${number(school.grade3Students)}">
           <label>전체 학생수</label>
-          <input readonly value="${total}">
+          <input id="schoolTotalStudents" readonly value="${total}">
         </div>
+        <div class="school-info-lookup">
+          <button type="button" data-action="lookup-school-students">학교알리미 학생수 조회</button>
+          <span id="schoolInfoStatus" class="help" role="status" aria-live="polite">학교를 선택하면 공시 학생수를 자동으로 불러옵니다. 조회값은 확인 후 수정할 수 있습니다.</span>
+        </div>
+        <input type="hidden" name="schoolCode" value="${escapeHtml(school.schoolCode)}">
       </fieldset>
-      <p class="help">학교알리미 자동 조회는 추후 연결합니다. 현재 버전은 직접 입력합니다.</p>
       <div class="page-actions"><button type="submit">저장</button></div>
     </form>
   `;
@@ -40,6 +74,8 @@ export function readSchoolForm(form, previous) {
     ...previous,
     name: String(data.get('name') ?? '').trim(),
     homepage: String(data.get('homepage') ?? '').trim(),
+    educationOffice: String(data.get('educationOffice') ?? '').trim(),
+    schoolCode: String(data.get('schoolCode') ?? '').trim(),
     schoolYear: Math.max(0, number(data.get('schoolYear'))),
     grade1Students: Math.max(0, number(data.get('grade1Students'))),
     grade2Students: Math.max(0, number(data.get('grade2Students'))),
