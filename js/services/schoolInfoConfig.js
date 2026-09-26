@@ -3,6 +3,6 @@
  * 브라우저에 두지 않고 Functions Secret Manager에 보관합니다.
  */
 export const schoolInfoConfig = Object.freeze({
-  gatewayUrl: '',
+  gatewayUrl: 'https://schoolinfogateway-exxbexlnrq-du.a.run.app',
   requestTimeoutMs: 45000
 });
