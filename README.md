@@ -22,7 +22,7 @@ python3 -m http.server 8000
 
 학교 목록은 학교알리미 OpenAPI의 학교기본정보를, 학생수는 `학년별·학급별 학생수` 항목을 사용합니다. 학교알리미 공시자료는 최근 3년만 제공되므로 조회할 공시연도도 최근 3년 범위여야 합니다.
 
-실제 Firebase 프로젝트 ID와 개인 API 키는 저장소에 기록하지 않습니다. 배포할 프로젝트를 선택하고 API 키를 Secret Manager에 등록해야 합니다.
+실제 Firebase 프로젝트 ID와 개인 API 키는 저장소에 기록하지 않습니다. 부산 학교 조회에는 학교알리미 키만 사용하며, NEIS 키는 필요하지 않습니다.
 
 1. Firebase CLI에서 배포할 프로젝트를 선택합니다(`firebase use --add`). 저장소의 `.firebaserc.example`에는 예시용 ID만 있습니다.
 2. 학교알리미에서 OpenAPI 키를 발급합니다.
@@ -32,8 +32,9 @@ python3 -m http.server 8000
    {"schoolInfoApiKey":"학교알리미 키"}
    ```
 
-4. `firebase deploy --only functions:schoolInfoGateway`로 함수를 배포합니다. CORS 허용 주소는 기존 `AI_ALLOWED_ORIGINS` 설정을 함께 사용합니다.
-5. 배포된 HTTPS 함수 주소를 [schoolInfoConfig.js](js/services/schoolInfoConfig.js)의 `gatewayUrl`에 설정합니다.
+4. `functions/.env.example`을 `functions/.env.<프로젝트ID>`로 복사합니다. 예를 들어 프로젝트 ID가 `ftc1-6b064`이면 `functions/.env.ftc1-6b064`입니다. 이 파일은 Git에서 제외되며, 배포에 필요한 비밀이 아닌 기본 환경 설정을 제공합니다.
+5. `firebase deploy --only functions:schoolInfoGateway`로 함수를 배포합니다. CORS 허용 주소는 `AI_ALLOWED_ORIGINS` 설정을 사용합니다.
+6. 배포 명령이 출력한 HTTPS 함수 주소를 [schoolInfoConfig.js](js/services/schoolInfoConfig.js)의 `gatewayUrl`에 설정합니다. 현재 저장소에는 `ftc1-6b064` 프로젝트의 주소가 설정되어 있습니다.
 
 API 키는 Firebase Secret Manager에만 저장하며 프런트엔드 코드나 저장 파일에는 넣지 않습니다.
 
