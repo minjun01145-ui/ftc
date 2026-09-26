@@ -12,6 +12,7 @@ setGlobalOptions({ region: 'asia-northeast3', maxInstances: 3 });
 export const schoolInfoGateway = onRequest(
   {
     cors: false,
+    invoker: 'public',
     secrets: [SCHOOL_DATA_API_KEYS],
     timeoutSeconds: 45,
     memory: '256MiB'

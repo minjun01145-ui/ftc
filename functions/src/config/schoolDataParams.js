@@ -1,4 +1,4 @@
-import { defineJsonSecret } from 'firebase-functions/params';
+import { defineSecret } from 'firebase-functions/params';
 
-/** JSON object: { "schoolInfoApiKey": "..." } */
-export const SCHOOL_DATA_API_KEYS = defineJsonSecret('SCHOOL_DATA_API_KEYS');
+/** Schoolinfo API key, stored only in Firebase Secret Manager. */
+export const SCHOOL_DATA_API_KEYS = defineSecret('SCHOOL_DATA_API_KEYS');

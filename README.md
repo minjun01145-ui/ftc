@@ -26,11 +26,7 @@ python3 -m http.server 8000
 
 1. Firebase CLI에서 배포할 프로젝트를 선택합니다(`firebase use --add`). 저장소의 `.firebaserc.example`에는 예시용 ID만 있습니다.
 2. 학교알리미에서 OpenAPI 키를 발급합니다.
-3. `firebase functions:secrets:set SCHOOL_DATA_API_KEYS`로 아래 JSON 형식의 시크릿을 등록합니다.
-
-   ```json
-   {"schoolInfoApiKey":"학교알리미 키"}
-   ```
+3. `firebase functions:secrets:set SCHOOL_DATA_API_KEYS`로 Secret Manager에 시크릿을 만들고, 입력란에 학교알리미 API 키 원문을 붙여 넣습니다. 이 값은 JSON으로 감싸지 않습니다.
 
 4. `functions/.env.example`을 `functions/.env.<프로젝트ID>`로 복사합니다. 예를 들어 프로젝트 ID가 `ftc1-6b064`이면 `functions/.env.ftc1-6b064`입니다. 이 파일은 Git에서 제외되며 학교 조회의 허용 출처만 설정합니다.
 5. `firebase deploy --only functions:default`로 학교 조회 코드베이스만 배포합니다. AI 코드베이스는 이 배포에서 읽거나 변경하지 않습니다.

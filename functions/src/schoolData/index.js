@@ -10,6 +10,23 @@ import { SchoolDataError } from './errors.js';
 import { getSchoolInfoBasicRows, getSchoolInfoStudentRows, readStudentCounts } from './schoolInfoClient.js';
 
 function getSchoolInfoApiKey(value) {
+  if (typeof value === 'string') {
+    const secretText = value.trim();
+    if (!secretText) return '';
+
+    try {
+      const parsed = JSON.parse(secretText);
+      if (typeof parsed === 'string') return parsed.trim();
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return String(parsed.schoolInfoApiKey ?? '').trim();
+      }
+    } catch {
+      // A plain string is the expected format for the single Schoolinfo key.
+    }
+
+    return secretText;
+  }
+
   if (!value || typeof value !== 'object' || Array.isArray(value)) return '';
   return String(value.schoolInfoApiKey ?? '').trim();
 }
