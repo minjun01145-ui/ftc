@@ -27,13 +27,14 @@ export const BUSAN_SGG_CODES = Object.freeze({
   기장군: '26710'
 });
 
+export const FTC_SCHOOL_SCOPE = Object.freeze({
+  kindCode: '03',
+  kindLabel: '중학교',
+  establishment: '공립'
+});
+
 export const SCHOOLINFO_SCHOOL_KINDS = Object.freeze([
-  { code: '02', label: '초등학교' },
-  { code: '03', label: '중학교' },
-  { code: '04', label: '고등학교' },
-  { code: '05', label: '특수학교' },
-  { code: '06', label: '그 외 학교' },
-  { code: '07', label: '각종학교' }
+  { code: FTC_SCHOOL_SCOPE.kindCode, label: FTC_SCHOOL_SCOPE.kindLabel }
 ]);
 
 export function normalizeText(value) {

@@ -1,9 +1,9 @@
 import {
   getOfficeOrThrow,
   getOfficeRegionsOrThrow,
-  getSchoolKindOrThrow,
   getSchoolRegionOrThrow,
   normalizeText,
+  FTC_SCHOOL_SCOPE,
   SCHOOLINFO_SCHOOL_KINDS
 } from './constants.js';
 import { SchoolDataError } from './errors.js';
@@ -63,8 +63,11 @@ export async function findSchools({ educationOffice, query = '' }, secretValue) 
 
   const queryKey = normalizeText(searchText);
   const schools = resultSets
-    .flatMap(({ region, kind, rows }) => rows.map(row => normalizeSchool(row, { educationOffice, region, kind })))
-    .filter(school => school.schoolCode && school.name && (!queryKey || normalizeText(school.name).includes(queryKey)))
+    .flatMap(({ region, kind, rows }) => rows
+      .filter(row => String(row.FOND_SC_CODE ?? '').trim() === FTC_SCHOOL_SCOPE.establishment)
+      .map(row => normalizeSchool(row, { educationOffice, region, kind })))
+    .filter(school => school.schoolCode && school.name
+      && (!queryKey || normalizeText(school.name).includes(queryKey)))
     .sort((left, right) => left.name.localeCompare(right.name, 'ko-KR'));
 
   return { schools, office: office.label };
@@ -91,13 +94,12 @@ export async function findStudentCounts({
   educationOffice,
   schoolCode,
   schoolRegionCode,
-  schoolKindCode,
   reportYear: rawYear
 }, secretValue) {
   getOfficeOrThrow(educationOffice);
   const code = requireString(schoolCode, '학교코드', 24);
   const region = getSchoolRegionOrThrow(educationOffice, schoolRegionCode);
-  const kind = getSchoolKindOrThrow(schoolKindCode);
+  const kind = FTC_SCHOOL_SCOPE;
   const reportYear = requireReportYear(rawYear);
   const apiKey = getSchoolInfoApiKey(secretValue);
   if (!apiKey) throw new SchoolDataError(503, 'SCHOOLINFO_KEY_MISSING', '학교알리미 OpenAPI 키가 서버에 설정되지 않았습니다.');
@@ -107,7 +109,8 @@ export async function findStudentCounts({
     getSchoolInfoBasicRows(schoolInfoContext),
     getSchoolInfoStudentRows({ ...schoolInfoContext, reportYear })
   ]);
-  const school = basicRows.find(row => String(row.SCHUL_CODE ?? '') === code);
+  const school = basicRows.find(row => String(row.SCHUL_CODE ?? '') === code
+    && String(row.FOND_SC_CODE ?? '').trim() === FTC_SCHOOL_SCOPE.establishment);
   if (!school) {
     throw new SchoolDataError(404, 'SCHOOL_NOT_FOUND', '선택한 교육지원청의 학교를 찾지 못했습니다. 학교를 다시 검색해 주세요.');
   }
@@ -142,7 +145,6 @@ export async function executeSchoolDataAction(body, secretValue) {
       educationOffice: body.educationOffice,
       schoolCode: body.schoolCode,
       schoolRegionCode: body.schoolRegionCode,
-      schoolKindCode: body.schoolKindCode,
       reportYear: body.reportYear
     }, secretValue);
   }

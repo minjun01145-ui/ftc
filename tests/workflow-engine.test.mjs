@@ -8,7 +8,6 @@ import {
   compareConfirmedPlan,
   createConfirmedPlanSnapshot,
   reconcileAdministrativeEntries,
-  suggestSchoolBudgets
 } from '../js/workflowEngine.js';
 
 function attendance({ enrolled, notApplied = 0, postContractCanceled = 0, dayAbsent = 0, vulnerableEnrolled, vulnerablePostContractCanceled = 0, fixedCostAbsent = 0 }) {
@@ -22,6 +21,7 @@ function attendance({ enrolled, notApplied = 0, postContractCanceled = 0, dayAbs
 function exampleProject({ grade, enrolled, notApplied = 0, postContractCanceled = 0, vulnerableEnrolled, regularLimit, cultureAmount, generalSchoolAmount, grantAmount, fixedCostAbsent = 1 }) {
   const project = createProject(`${grade}학년 현장체험학습`);
   project.grade = grade;
+  project.totalStudents = enrolled;
   project.startDate = '2026-05-13';
   project.endDate = '2026-05-15';
   project.days = 3;
@@ -80,9 +80,10 @@ function twoYearProject() {
     regularLimit: 220000, cultureAmount: 954000, generalSchoolAmount: 1722500,
     grantAmount: 20360000
   });
-  project.workflow.actual.attendance = attendance({
-    enrolled: 72, notApplied: 1, postContractCanceled: 1, vulnerableEnrolled: 18, fixedCostAbsent: 1
-  });
+  project.workflow.actual.attendance = {
+    schema: 'core-v1', applicants: 71, chaperones: 8, vulnerableEnrolled: 18,
+    vulnerableNotApplied: 0, vulnerableDayAbsent: 0, regularDayAbsent: 1
+  };
   project.workflow.actual.resourceAmounts = {
     [`culture-school-${project.grade}`]: 936000,
     [`school-general-${project.grade}`]: 1690000
@@ -92,7 +93,7 @@ function twoYearProject() {
 
 function schoolFor(project, amount) {
   return {
-    name: '익명 학교', schoolYear: 2026, annualSchoolBudget: amount,
+    name: '익명 학교', schoolYear: 2026,
     projectBudgets: { [project.id]: { amount, fixed: false, targetBurden: null } }
   };
 }
@@ -111,7 +112,7 @@ test('2학년 계획과 정산 사례에서 취약·비취약·불참 재원과 
   assert.equal(plan.schoolUsed, 2676500);
   assert.equal(plan.studentUsed, 2279000);
   assert.equal(plan.eventTotal, 22129900);
-  assert.equal(actual.attendance.enrolled, 72);
+  assert.equal(actual.attendance.enrolled, 71);
   assert.equal(actual.attendance.participants, 70);
   assert.equal(actual.attendance.vulnerableParticipants, 18);
   assert.equal(actual.attendance.regularParticipants, 52);
@@ -259,6 +260,7 @@ test('행정실 원인행위·지급은 독립 입력이고 일부 지급, 미�
 
 test('공통 계약 환불은 계약 전체와 학생·인솔자 순부담을 다시 계산하고 지급대조에 반영한다', () => {
   const project = createProject('공통 계약 환불');
+  project.totalStudents = 2;
   project.workflow.attendance = { ...attendance({ enrolled: 2, vulnerableEnrolled: 0, fixedCostAbsent: 0 }), chaperones: 1 };
   project.chaperones = 1;
   const expense = createExpense({
@@ -288,6 +290,7 @@ test('공통 계약 환불은 계약 전체와 학생·인솔자 순부담을 �
 
 test('지원금 잔액은 산출 반납액과 행정실 실제 반납액을 독립 대조한다', () => {
   const project = createProject('지원금 반납');
+  project.totalStudents = 1;
   project.workflow.attendance = attendance({ enrolled: 1, vulnerableEnrolled: 0, fixedCostAbsent: 0 });
   const expense = createExpense({ id: 'trip', name: '입장료', unitAmount: 100, actualAmount: 100 });
   project.expenses = [expense];
@@ -320,7 +323,10 @@ test('확정 계획은 실제 인원 변경과 정산 뒤에도 스냅샷 값으
   assert.equal(snapshot.calculations.schoolBudgetAmount, 2676500);
   project.workflow.confirmedPlan = snapshot;
   project.workflow.confirmedPlans = [snapshot];
-  project.workflow.actual.attendance = attendance({ enrolled: 72, notApplied: 1, postContractCanceled: 1, vulnerableEnrolled: 18, fixedCostAbsent: 1 });
+  project.workflow.actual.attendance = {
+    schema: 'core-v1', applicants: 71, chaperones: 8, vulnerableEnrolled: 18,
+    vulnerableNotApplied: 0, vulnerableDayAbsent: 0, regularDayAbsent: 1
+  };
   const comparison = compareConfirmedPlan(project, school);
   assert.equal(snapshot.calculations.studentCost, 22129900);
   assert.equal(comparison.status, '실적 입력 완료');
@@ -331,20 +337,9 @@ test('확정 계획은 실제 인원 변경과 정산 뒤에도 스냅샷 값으
   assert.equal(project.workflow.confirmedPlans[0].calculations.studentCost, 22129900);
 });
 
-test('학년별 학교 예산 제안은 고정 배정과 목표 부담을 존중하고 미배정 잔액을 계산한다', () => {
-  const g1 = exampleProject({ grade: 1, enrolled: 10, vulnerableEnrolled: 0, regularLimit: 0, cultureAmount: 0, generalSchoolAmount: 1000000, grantAmount: 0, fixedCostAbsent: 0 });
-  const g2 = exampleProject({ grade: 2, enrolled: 10, vulnerableEnrolled: 0, regularLimit: 0, cultureAmount: 0, generalSchoolAmount: 1000000, grantAmount: 0, fixedCostAbsent: 0 });
-  g1.workflow.resources[0].eligibleGroups = [];
-  g2.workflow.resources[0].eligibleGroups = [];
-  const school = { annualSchoolBudget: 500000, projectBudgets: { [g1.id]: { amount: 100000, fixed: true }, [g2.id]: { amount: 0, fixed: false } } };
-  const result = suggestSchoolBudgets([g1, g2], school);
-  assert.equal(result.suggestions[g1.id], 100000);
-  assert.ok(result.suggestions[g2.id] <= 400000);
-  assert.equal(result.used + result.unallocated, 500000);
-});
-
 test('학생 부담으로 분류한 재원은 보고 합계와 비취약 부담에 포함된다', () => {
   const project = createProject('학생 부담 재원');
+  project.totalStudents = 2;
   project.workflow.attendance = attendance({ enrolled: 2, vulnerableEnrolled: 0, fixedCostAbsent: 0 });
   project.expenses = [createExpense({ id: 'ticket', name: '관람권', unitAmount: 10000 })];
   project.workflow.resources = [createFundingSource({
@@ -364,13 +359,14 @@ test('학생 부담으로 분류한 재원은 보고 합계와 비취약 부담�
   assert.equal(lines.find(row => row.source === '학생 납부금').amount, 12000);
 });
 
-test('schema v4 JSON은 스키마 v5로 인원과 안정적 ID를 보완하고 기존 실적은 미입력으로 둔다', () => {
+test('schema v4 JSON은 스키마 v6로 기존 인원과 안정적 ID를 보완하고 실적은 미입력으로 둔다', () => {
   const old = normalizeState({ schemaVersion: 4, school: {}, projects: [{
     id: 'legacy-p', title: '이전 사업', totalStudents: 10, actualParticipants: 9, absentStudents: 1,
     expenses: [{ id: 'legacy-e', name: '버스', planAmount: 1000, actualAmount: null }]
   }] });
-  assert.equal(old.schemaVersion, 5);
+  assert.equal(old.schemaVersion, 6);
   assert.equal(old.projects[0].workflow.attendance.enrolled, 10);
+  assert.equal(old.projects[0].workflow.attendance.schema, 'legacy-v5');
   assert.equal(old.projects[0].expenses[0].id, 'legacy-e');
   assert.equal(old.projects[0].expenses[0].actualAmount, null);
   assert.equal(old.projects[0].workflow.resources[0].id, 'education-legacy-p');

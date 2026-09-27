@@ -379,10 +379,12 @@ table input[type="text"] { min-width: 150px; }
 .workflow-business-grid .wide-field { grid-column: span 2; }
 .workflow-count-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(150px, 1fr));
+  grid-template-columns: repeat(2, minmax(150px, 1fr));
   gap: 8px 12px;
   max-width: 1050px;
 }
+.workflow-count-sections { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 18px; }
+.workflow-count-group h3 { margin-top: 4px; }
 .workflow-count-grid input { width: 100%; }
 .workflow-derived { margin-top: 12px; padding: 8px; border-top: 1px solid #bbb; font-weight: bold; }
 .workflow-page h2 { margin-top: 18px; }
@@ -420,6 +422,7 @@ table input[type="text"] { min-width: 150px; }
 .delta { color: #8b0000; }
 
 @media (max-width: 900px) {
+  .workflow-count-sections { grid-template-columns: 1fr; }
   .workflow-count-grid { grid-template-columns: repeat(2, minmax(140px, 1fr)); }
   .workflow-business-grid { grid-template-columns: repeat(2, minmax(150px, 1fr)); }
   .resource-limit-grid { grid-template-columns: repeat(2, minmax(140px, 1fr)); }

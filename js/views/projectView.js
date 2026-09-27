@@ -10,6 +10,7 @@ import { renderSettlementSection } from './project/settlementSection.js';
 import { renderTripScheduleSection } from './project/tripScheduleSection.js';
 import { renderWorkflowSection } from './project/workflowSection.js';
 import { createFundingSource } from '../presets.js';
+import { summarizeAttendance } from '../workflowEngine.js';
 
 function renderBusinessSections(project, school) {
   return `${renderBusinessInfoSection(project, school)}${renderTripScheduleSection(project)}`;
@@ -72,51 +73,20 @@ export function readProjectForm(form, previous) {
   if (has(data, 'startDate')) next.startDate = String(data.get('startDate') ?? '');
   if (has(data, 'endDate')) next.endDate = String(data.get('endDate') ?? '');
   if (has(data, 'grade')) next.grade = data.get('grade') ? number(data.get('grade')) : '';
-  if (has(data, 'schoolLevel')) next.schoolLevel = String(data.get('schoolLevel') ?? '중');
-  if (has(data, 'establishment')) next.establishment = String(data.get('establishment') ?? '공립');
   if (has(data, 'executionMode')) next.executionMode = String(data.get('executionMode') ?? '숙박형');
   if (has(data, 'place')) next.place = String(data.get('place') ?? '').trim();
   if (has(data, 'days')) next.days = Math.max(0, number(data.get('days')));
 
-  if (has(data, 'totalStudents') || has(data, 'absentStudents') || has(data, 'vulnerableStudents') || has(data, 'vulnerableAbsent') || has(data, 'chaperones')) {
-    const totalStudents = has(data, 'totalStudents') ? Math.max(0, number(data.get('totalStudents'))) : Math.max(0, number(previous.totalStudents));
-    const absentStudents = has(data, 'absentStudents') ? Math.max(0, number(data.get('absentStudents'))) : Math.max(0, number(previous.absentStudents));
-    const vulnerableStudents = has(data, 'vulnerableStudents') ? Math.max(0, number(data.get('vulnerableStudents'))) : Math.max(0, number(previous.vulnerableStudents));
-    const vulnerableAbsent = has(data, 'vulnerableAbsent') ? Math.max(0, number(data.get('vulnerableAbsent'))) : Math.max(0, number(previous.vulnerableAbsent));
-
-    const headcountChanged = totalStudents !== number(previous.totalStudents)
-      || absentStudents !== number(previous.absentStudents)
-      || vulnerableStudents !== number(previous.vulnerableStudents)
-      || vulnerableAbsent !== number(previous.vulnerableAbsent)
-      || (has(data, 'chaperones') && number(data.get('chaperones')) !== number(previous.chaperones));
-    next.totalStudents = totalStudents;
-    next.absentStudents = absentStudents;
-    next.actualParticipants = Math.max(0, totalStudents - absentStudents);
-    next.vulnerableStudents = vulnerableStudents;
-    next.vulnerableAbsent = vulnerableAbsent;
-    next.vulnerableParticipants = Math.max(0, vulnerableStudents - vulnerableAbsent);
-    if (has(data, 'chaperones')) next.chaperones = Math.max(0, number(data.get('chaperones')));
-    if (headcountChanged) {
-      const attendance = next.workflow?.attendance ?? {};
-      next.workflow = {
-        ...next.workflow,
-        attendance: {
-          ...attendance,
-          enrolled: totalStudents,
-          notApplied: Math.max(0, totalStudents - (Math.max(0, totalStudents - absentStudents) + absentStudents)),
-          preContractCanceled: 0,
-          postContractCanceled: absentStudents,
-          dayAbsent: 0,
-          chaperones: next.chaperones,
-          vulnerableEnrolled: vulnerableStudents,
-          vulnerableNotApplied: 0,
-          vulnerablePreContractCanceled: 0,
-          vulnerablePostContractCanceled: vulnerableAbsent,
-          vulnerableDayAbsent: 0,
-          fixedCostAbsent: Math.min(absentStudents, number(attendance.fixedCostAbsent))
-        }
-      };
-    }
+  if (has(data, 'totalStudents')) {
+    const rawTotal = String(data.get('totalStudents') ?? '');
+    next.totalStudents = rawTotal === '' ? 0 : Number(rawTotal);
+    const summary = summarizeAttendance(next.workflow?.attendance ?? {}, next.totalStudents);
+    next.actualParticipants = summary.participants;
+    next.absentStudents = Math.max(0, summary.enrolled - summary.participants);
+    next.vulnerableStudents = summary.vulnerableEnrolled;
+    next.vulnerableParticipants = summary.vulnerableParticipants;
+    next.vulnerableAbsent = summary.vulnerableAbsent;
+    next.chaperones = summary.chaperones;
   }
 
   if (has(data, 'regularPerPerson') || has(data, 'vulnerablePerPerson') || has(data, 'vulnerableFullSupport') || has(data, 'grantTotal')) {

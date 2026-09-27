@@ -45,24 +45,27 @@ export function createFundingSource(overrides = {}) {
   };
 }
 
+export const FTC_SCHOOL_SCOPE = Object.freeze({ schoolLevel: '중', establishment: '공립' });
+
+const attendanceFields = Object.freeze([
+  'applicants', 'chaperones', 'vulnerableEnrolled', 'vulnerableNotApplied',
+  'vulnerableDayAbsent', 'regularDayAbsent'
+]);
+
 const emptyAttendance = () => ({
-  enrolled: 0,
-  notApplied: 0,
-  preContractCanceled: 0,
-  postContractCanceled: 0,
-  dayAbsent: 0,
+  schema: 'core-v1',
+  applicants: 0,
+  chaperones: 0,
   vulnerableEnrolled: 0,
   vulnerableNotApplied: 0,
-  vulnerablePreContractCanceled: 0,
-  vulnerablePostContractCanceled: 0,
   vulnerableDayAbsent: 0,
-  fixedCostAbsent: 0,
-  chaperones: 0
+  regularDayAbsent: 0
 });
 
-const emptyActualAttendance = () => Object.fromEntries(
-  Object.keys(emptyAttendance()).map(key => [key, null])
-);
+const emptyActualAttendance = () => ({
+  schema: 'core-v1',
+  ...Object.fromEntries(attendanceFields.map(key => [key, null]))
+});
 
 function createWorkflow() {
   return {
@@ -111,8 +114,8 @@ export function createProject(title = '새 사업') {
     id: uid('project'),
     title,
     grade: '',
-    schoolLevel: '중',
-    establishment: '공립',
+    schoolLevel: FTC_SCHOOL_SCOPE.schoolLevel,
+    establishment: FTC_SCHOOL_SCOPE.establishment,
     executionMode: '숙박형',
     place: '',
     days: 0,
@@ -146,7 +149,7 @@ export function createProject(title = '새 사업') {
 }
 
 export const defaultState = {
-  schemaVersion: 5,
+  schemaVersion: 6,
   school: {
     name: '',
     homepage: '',
@@ -197,21 +200,55 @@ function normalizeExpense(expense) {
   };
 }
 
+const legacyAttendanceFields = Object.freeze([
+  'enrolled', 'notApplied', 'preContractCanceled', 'postContractCanceled', 'dayAbsent',
+  'chaperones', 'vulnerableEnrolled', 'vulnerableNotApplied', 'vulnerablePreContractCanceled',
+  'vulnerablePostContractCanceled', 'vulnerableDayAbsent', 'fixedCostAbsent'
+]);
+
+function normalizeLegacyAttendance(value = {}) {
+  const source = value && typeof value === 'object' ? value : {};
+  return Object.fromEntries(legacyAttendanceFields.map(key => [key, Math.max(0, number(source[key]))]));
+}
+
 function normalizeAttendance(value, fallback = emptyAttendance()) {
   const source = value && typeof value === 'object' ? value : {};
-  return Object.fromEntries(Object.keys(fallback).map(key => [
-    key,
-    Math.max(0, source[key] === '' || source[key] === null || source[key] === undefined
-      ? number(fallback[key]) : number(source[key]))
-  ]));
+  if (source.schema === 'core-v1') {
+    return {
+      schema: 'core-v1',
+      ...Object.fromEntries(attendanceFields.map(key => [key,
+        source[key] === '' || source[key] === null || source[key] === undefined
+          ? number(fallback[key]) : number(source[key])
+      ])),
+      ...(source.legacyAttendance && typeof source.legacyAttendance === 'object'
+        ? { legacyAttendance: normalizeLegacyAttendance(source.legacyAttendance) } : {})
+    };
+  }
+  return {
+    schema: 'legacy-v5',
+    ...normalizeLegacyAttendance(Object.keys(source).length ? source : fallback)
+  };
 }
 
 function normalizeActualAttendance(value) {
   const source = value && typeof value === 'object' ? value : {};
-  return Object.fromEntries(Object.keys(emptyActualAttendance()).map(key => [
-    key,
-    source[key] === '' || source[key] === null || source[key] === undefined ? null : Math.max(0, number(source[key]))
-  ]));
+  if (source.schema === 'core-v1') {
+    return {
+      schema: 'core-v1',
+      ...Object.fromEntries(attendanceFields.map(key => [key,
+        source[key] === '' || source[key] === null || source[key] === undefined ? null : number(source[key])
+      ])),
+      ...(source.legacyAttendance && typeof source.legacyAttendance === 'object'
+        ? { legacyAttendance: normalizeLegacyAttendance(source.legacyAttendance) } : {})
+    };
+  }
+  if (!legacyAttendanceFields.some(key => Object.hasOwn(source, key))) return emptyActualAttendance();
+  return {
+    schema: 'legacy-v5',
+    ...Object.fromEntries(legacyAttendanceFields.map(key => [key,
+      source[key] === '' || source[key] === null || source[key] === undefined ? null : Math.max(0, number(source[key]))
+    ]))
+  };
 }
 
 function normalizeFundingSource(value) {
@@ -416,7 +453,7 @@ export function normalizeState(value) {
   const source = value && typeof value === 'object' ? value : {};
   const school = source.school && typeof source.school === 'object' ? source.school : {};
   return {
-    schemaVersion: 5,
+    schemaVersion: 6,
     school: {
       ...clone(defaultState.school),
       ...school,

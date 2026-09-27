@@ -41,14 +41,12 @@ export async function getSchoolStudentCounts({
   educationOffice,
   schoolCode,
   schoolRegionCode,
-  schoolKindCode,
   reportYear
 }) {
   return requestSchoolData('studentCounts', {
     educationOffice,
     schoolCode,
     schoolRegionCode,
-    schoolKindCode,
     reportYear
   });
 }

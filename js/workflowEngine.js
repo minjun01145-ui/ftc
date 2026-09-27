@@ -9,17 +9,137 @@ export const COHORTS = Object.freeze([
   { key: 'unclassified', label: '구분 미입력 비용' }
 ]);
 
-const countFields = Object.freeze([
-  'enrolled', 'notApplied', 'preContractCanceled', 'postContractCanceled', 'dayAbsent', 'chaperones',
-  'vulnerableEnrolled', 'vulnerableNotApplied', 'vulnerablePreContractCanceled',
+const attendanceFields = Object.freeze([
+  'applicants', 'chaperones', 'vulnerableEnrolled', 'vulnerableNotApplied',
+  'vulnerableDayAbsent', 'regularDayAbsent'
+]);
+const legacyAttendanceFields = Object.freeze([
+  'enrolled', 'notApplied', 'preContractCanceled', 'postContractCanceled', 'dayAbsent',
+  'chaperones', 'vulnerableEnrolled', 'vulnerableNotApplied', 'vulnerablePreContractCanceled',
   'vulnerablePostContractCanceled', 'vulnerableDayAbsent', 'fixedCostAbsent'
 ]);
 
 const count = value => Math.max(0, Math.floor(number(value)));
 const won = value => Math.max(0, Math.round(number(value)));
 
-export function summarizeAttendance(attendance = {}) {
-  const values = Object.fromEntries(countFields.map(key => [key, count(attendance[key])]));
+function validCount(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && Number.isInteger(parsed) && parsed >= 0 ? parsed : false;
+}
+
+export function attendanceInputValues(attendance = {}, totalEnrollment = 0) {
+  if (attendance.schema === 'core-v1') {
+    return Object.fromEntries(attendanceFields.map(key => [key, attendance[key] ?? '']));
+  }
+  // Legacy v5 tracked enrollment, applications, cancellations, and day absences
+  // separately. Fold cancellations into the new application counts so that
+  // subtracting only day absences keeps the saved participant totals unchanged.
+  const enrolled = totalEnrollment === null || totalEnrollment === undefined
+    ? count(attendance.enrolled) : count(totalEnrollment);
+  const hasValue = key => attendance[key] !== null && attendance[key] !== undefined && attendance[key] !== '';
+  const applicantsReady = ['notApplied', 'preContractCanceled', 'postContractCanceled'].every(hasValue);
+  const vulnerableValuesReady = ['vulnerableEnrolled', 'vulnerableNotApplied',
+    'vulnerablePreContractCanceled', 'vulnerablePostContractCanceled'].every(hasValue);
+  const vulnerableEnrolled = count(attendance.vulnerableEnrolled);
+  const vulnerableApplicants = Math.max(0, vulnerableEnrolled
+    - count(attendance.vulnerableNotApplied)
+    - count(attendance.vulnerablePreContractCanceled)
+    - count(attendance.vulnerablePostContractCanceled));
+  const dayAbsent = count(attendance.dayAbsent);
+  const vulnerableDayAbsent = count(attendance.vulnerableDayAbsent);
+  return {
+    applicants: applicantsReady ? Math.max(0, enrolled - count(attendance.notApplied)
+      - count(attendance.preContractCanceled) - count(attendance.postContractCanceled)) : '',
+    chaperones: attendance.chaperones ?? '',
+    vulnerableEnrolled: attendance.vulnerableEnrolled ?? '',
+    vulnerableNotApplied: vulnerableValuesReady ? Math.max(0, vulnerableEnrolled - vulnerableApplicants) : '',
+    vulnerableDayAbsent: attendance.vulnerableDayAbsent ?? '',
+    regularDayAbsent: hasValue('dayAbsent') && hasValue('vulnerableDayAbsent')
+      ? Math.max(0, dayAbsent - vulnerableDayAbsent) : ''
+  };
+}
+
+function summarizeCoreAttendance(attendance, totalEnrollment) {
+  const raw = Object.fromEntries(attendanceFields.map(key => [key, attendance[key]]));
+  const enrollmentValue = validCount(totalEnrollment);
+  const valuesForValidation = { enrolled: enrollmentValue, ...Object.fromEntries(attendanceFields.map(key => [key, validCount(raw[key])])) };
+  const issues = [];
+  if (enrollmentValue === false) issues.push('전체 재적 인원은 0 이상의 정수여야 합니다.');
+  for (const key of attendanceFields) {
+    if (valuesForValidation[key] === false) {
+      const labels = {
+        applicants: '신청 학생 수', chaperones: '인솔자 수', vulnerableEnrolled: '취약계층 재적 인원',
+        vulnerableNotApplied: '취약계층 미신청 인원', vulnerableDayAbsent: '취약계층 당일 불참 인원',
+        regularDayAbsent: '비취약계층 당일 불참 인원'
+      };
+      issues.push(`${labels[key]}은(는) 0 이상의 정수여야 합니다.`);
+    }
+  }
+  const enrolled = enrollmentValue === false || enrollmentValue === null ? 0 : enrollmentValue;
+  const values = Object.fromEntries(attendanceFields.map(key => [key,
+    valuesForValidation[key] === null || valuesForValidation[key] === false ? 0 : valuesForValidation[key]
+  ]));
+  const totalNotApplied = Math.max(0, enrolled - values.applicants);
+  const vulnerableApplicants = Math.max(0, values.vulnerableEnrolled - values.vulnerableNotApplied);
+  const regularEnrolled = Math.max(0, enrolled - values.vulnerableEnrolled);
+  const regularNotApplied = totalNotApplied - values.vulnerableNotApplied;
+  const regularApplicants = regularEnrolled - regularNotApplied;
+  const dayAbsent = values.vulnerableDayAbsent + values.regularDayAbsent;
+  const participants = Math.max(0, values.applicants - dayAbsent);
+  const vulnerableParticipants = Math.max(0, vulnerableApplicants - values.vulnerableDayAbsent);
+  const regularParticipants = Math.max(0, regularApplicants - values.regularDayAbsent);
+  const missing = attendanceFields.some(key => valuesForValidation[key] === null);
+
+  if (!missing) {
+    if (values.applicants > enrolled) issues.push(`신청 학생 수 ${values.applicants}명이 전체 재적 ${enrolled}명을 초과합니다.`);
+    if (values.vulnerableEnrolled > enrolled) issues.push(`취약 재적 ${values.vulnerableEnrolled}명이 전체 재적 ${enrolled}명을 초과합니다.`);
+    if (values.vulnerableNotApplied > values.vulnerableEnrolled) issues.push('취약 미신청 인원이 취약계층 재적 인원을 초과합니다.');
+    if (regularNotApplied < 0 || regularApplicants < 0 || vulnerableApplicants + regularApplicants !== values.applicants) {
+      issues.push('신청 학생 수와 취약계층 신청 인원이 서로 맞지 않습니다.');
+    }
+    if (values.vulnerableDayAbsent > vulnerableApplicants) issues.push('취약 당일 불참 인원이 취약 신청 학생 수를 초과합니다.');
+    if (values.regularDayAbsent > regularApplicants) issues.push('비취약 당일 불참 인원이 비취약 신청 학생 수를 초과합니다.');
+  }
+
+  const legacyValues = {
+    enrolled,
+    notApplied: totalNotApplied,
+    preContractCanceled: 0,
+    postContractCanceled: 0,
+    dayAbsent,
+    chaperones: values.chaperones,
+    vulnerableEnrolled: values.vulnerableEnrolled,
+    vulnerableNotApplied: values.vulnerableNotApplied,
+    vulnerablePreContractCanceled: 0,
+    vulnerablePostContractCanceled: 0,
+    vulnerableDayAbsent: values.vulnerableDayAbsent,
+    fixedCostAbsent: 0
+  };
+  return {
+    enrolled,
+    applicants: values.applicants,
+    participants,
+    vulnerableEnrolled: values.vulnerableEnrolled,
+    vulnerableApplicants,
+    vulnerableContract: vulnerableApplicants,
+    vulnerableParticipants,
+    regularParticipants,
+    vulnerableAbsent: values.vulnerableDayAbsent,
+    regularAbsent: values.regularDayAbsent,
+    fixedCostAbsent: 0,
+    chaperones: values.chaperones,
+    values: { ...legacyValues, regularDayAbsent: values.regularDayAbsent },
+    issues
+  };
+}
+
+export function summarizeAttendance(attendance = {}, totalEnrollment = null) {
+  if (attendance.schema === 'core-v1') return summarizeCoreAttendance(attendance, totalEnrollment ?? 0);
+
+  const legacySource = attendance;
+  const values = Object.fromEntries(legacyAttendanceFields.map(key => [key, count(legacySource[key])]));
+  if (totalEnrollment !== null && totalEnrollment !== undefined) values.enrolled = count(totalEnrollment);
   const contractStudents = values.enrolled - values.notApplied - values.preContractCanceled;
   const participants = contractStudents - values.postContractCanceled - values.dayAbsent;
   const vulnerableContract = values.vulnerableEnrolled
@@ -29,7 +149,6 @@ export function summarizeAttendance(attendance = {}) {
   const students = {
     enrolled: values.enrolled,
     applicants: values.enrolled - values.notApplied,
-    contract: contractStudents,
     participants,
     vulnerableEnrolled: values.vulnerableEnrolled,
     vulnerableApplicants: values.vulnerableEnrolled - values.vulnerableNotApplied,
@@ -37,11 +156,19 @@ export function summarizeAttendance(attendance = {}) {
     vulnerableParticipants,
     regularParticipants: participants - vulnerableParticipants,
     vulnerableAbsent: values.vulnerablePostContractCanceled + values.vulnerableDayAbsent,
-    regularAbsent: values.postContractCanceled + values.dayAbsent - values.vulnerableAbsent,
+    regularAbsent: values.postContractCanceled + values.dayAbsent
+      - values.vulnerablePostContractCanceled - values.vulnerableDayAbsent,
     fixedCostAbsent: values.fixedCostAbsent,
     chaperones: values.chaperones
   };
   const issues = [];
+  if (totalEnrollment !== null && totalEnrollment !== undefined && validCount(totalEnrollment) === false) {
+    issues.push('전체 재적 인원은 0 이상의 정수여야 합니다.');
+  }
+  for (const key of legacyAttendanceFields) {
+    const parsed = validCount(legacySource[key]);
+    if (parsed === false) issues.push(`${key} 인원은 0 이상의 정수여야 합니다.`);
+  }
   for (const key of ['notApplied', 'preContractCanceled', 'postContractCanceled', 'dayAbsent']) {
     const max = key === 'notApplied' ? values.enrolled : key === 'preContractCanceled'
       ? values.enrolled - values.notApplied : key === 'postContractCanceled'
@@ -64,7 +191,7 @@ export function summarizeAttendance(attendance = {}) {
 }
 
 function projectForAttendance(project, attendance, actual = false) {
-  const a = summarizeAttendance(attendance);
+  const a = summarizeAttendance(attendance, project.totalStudents);
   return {
     ...project,
     totalStudents: a.enrolled,
@@ -77,12 +204,13 @@ function projectForAttendance(project, attendance, actual = false) {
     vulnerableStudents: a.vulnerableEnrolled,
     vulnerableParticipants: a.vulnerableParticipants,
     vulnerableAbsent: a.vulnerableAbsent,
-    chaperones: actual ? a.chaperones : count(project.chaperones)
+    chaperones: a.chaperones
   };
 }
 
 function legacyAttendance(project) {
   return {
+    schema: 'legacy-v5',
     enrolled: count(project.totalStudents),
     notApplied: 0,
     preContractCanceled: 0,
@@ -99,7 +227,8 @@ function legacyAttendance(project) {
 }
 
 function hasAttendanceInput(value = {}) {
-  return countFields.some(key => value[key] !== null && value[key] !== undefined && value[key] !== '' && count(value[key]) > 0);
+  if (value.schema === 'core-v1') return true;
+  return legacyAttendanceFields.some(key => value[key] !== null && value[key] !== undefined && value[key] !== '' && count(value[key]) > 0);
 }
 
 function expenseCategory(expense) {
@@ -113,15 +242,15 @@ function makeExpenseBasis(project, basis) {
   const planAttendance = hasAttendanceInput(configuredPlanAttendance) || count(project.totalStudents) === 0
     ? configuredPlanAttendance : legacyAttendance(project);
   const attendanceInput = basis === 'actual' ? workflow.actual?.attendance ?? {} : planAttendance;
+  const missingKeys = attendanceInput.schema === 'core-v1' ? attendanceFields : legacyAttendanceFields;
   const missingAttendance = basis === 'actual'
-    ? countFields.filter(key => attendanceInput[key] === null || attendanceInput[key] === undefined || attendanceInput[key] === '')
+    ? missingKeys.filter(key => attendanceInput[key] === null || attendanceInput[key] === undefined || attendanceInput[key] === '')
     : [];
   const attendance = basis === 'actual' && missingAttendance.length
-    ? summarizeAttendance(planAttendance)
-    : summarizeAttendance(attendanceInput);
+    ? summarizeAttendance(planAttendance, project.totalStudents)
+    : summarizeAttendance(attendanceInput, project.totalStudents);
   const actualCountIssues = basis === 'actual' && !missingAttendance.length ? attendance.issues : [];
-  const effectiveAttendance = basis === 'actual' && missingAttendance.length
-    ? planAttendance : attendanceInput;
+  const effectiveAttendance = basis === 'actual' && missingAttendance.length ? planAttendance : attendanceInput;
   const baseProject = projectForAttendance(project, effectiveAttendance, basis === 'actual');
   const expenseSource = basis === 'actual'
     ? (project.expenses ?? []).filter(expense => expense.actualAmount !== null && expense.actualAmount !== undefined)
@@ -585,104 +714,4 @@ export function compareConfirmedPlan(project, school) {
     if (next) add(`${old.name} 사용액`, old.used, next.used);
   }
   return { status: actual.missingActual ? '실적 초안' : '실적 입력 완료', differences: changes, actual };
-}
-
-function preSchoolRegularCosts(project, school) {
-  const cloneProject = clone(project);
-  cloneProject.workflow.resources = (cloneProject.workflow.resources ?? []).filter(source => source.reportClass !== 'school');
-  const finance = calculateWorkflow(cloneProject, school);
-  const eligibleByExpense = new Map();
-  for (const row of finance.rows) {
-    const expense = row._row;
-    const hasSchoolSource = (project.workflow?.resources ?? []).some(source => source.reportClass === 'school'
-      && eligibleForSource(source, expense, 'regular'));
-    const remainingRegular = row.groups.regular.remaining;
-    eligibleByExpense.set(row.id, {
-      base: remainingRegular,
-      eligible: hasSchoolSource ? remainingRegular : 0
-    });
-  }
-  return {
-    base: finance.regularStudentUsed,
-    cap: [...eligibleByExpense.values()].reduce((sum, item) => sum + item.eligible, 0),
-    people: finance.attendance.regularParticipants
-  };
-}
-
-export function suggestSchoolBudgets(projects, school, fixedOverrides = {}) {
-  const total = won(school.annualSchoolBudget);
-  const items = projects.map(project => {
-    const calc = preSchoolRegularCosts(project, school);
-    const existing = school.projectBudgets?.[project.id] ?? {};
-    return {
-      project,
-      base: calc.base,
-      cap: calc.cap,
-      people: calc.people,
-      fixed: fixedOverrides[project.id]?.fixed ?? existing.fixed ?? false,
-      fixedAmount: won(fixedOverrides[project.id]?.amount ?? existing.amount),
-      targetBurden: fixedOverrides[project.id]?.targetBurden ?? existing.targetBurden ?? null
-    };
-  });
-  let locked = items.filter(item => item.fixed);
-  let open = items.filter(item => !item.fixed);
-  let lockedTotal = locked.reduce((sum, item) => sum + Math.min(item.cap, item.fixedAmount), 0);
-  let remaining = Math.max(0, total - lockedTotal);
-  const targetSpecified = open.some(item => item.targetBurden !== null && item.targetBurden !== undefined && item.targetBurden !== '');
-  let target = null;
-  if (targetSpecified) {
-    for (const item of open) {
-      if (item.targetBurden !== null && item.targetBurden !== undefined && item.targetBurden !== '') {
-        item.needed = Math.min(item.cap, Math.max(0, item.base - won(item.targetBurden) * item.people));
-      } else {
-        item.needed = item.base;
-      }
-    }
-  } else if (open.length) {
-    let low = 0;
-    let high = Math.max(...open.map(item => item.people > 0 ? item.base / item.people : 0), 0);
-    for (let i = 0; i < 48; i++) {
-      const middle = (low + high) / 2;
-      const need = open.reduce((sum, item) => sum + Math.min(item.cap, Math.max(0, item.base - Math.floor(middle * item.people))), 0);
-      if (need > remaining) low = middle;
-      else high = middle;
-    }
-    target = Math.floor(high);
-    for (const item of open) item.needed = Math.min(item.cap, Math.max(0, item.base - target * item.people));
-  }
-  let suggestions = Object.fromEntries(locked.map(item => [item.project.id, Math.min(item.cap, item.fixedAmount)]));
-  for (const item of open) suggestions[item.project.id] = Math.min(item.cap, item.needed ?? 0);
-  let used = Object.values(suggestions).reduce((sum, amount) => sum + amount, 0);
-  if (!targetSpecified && used < remaining + lockedTotal && open.length) {
-    const order = [...open].sort((a, b) => (b.people ? b.base / b.people : 0) - (a.people ? a.base / a.people : 0));
-    for (const item of order) {
-      const room = Math.max(0, item.cap - suggestions[item.project.id]);
-      const add = Math.min(room, total - used);
-      suggestions[item.project.id] += add;
-      used += add;
-      if (used >= total) break;
-    }
-  }
-  return {
-    targetBurden: target,
-    suggestions,
-    used,
-    unallocated: Math.max(0, total - used),
-    shortfall: Math.max(
-      Math.max(0, lockedTotal - total),
-      targetSpecified ? Math.max(0, open.reduce((sum, item) => sum + (item.needed ?? 0), 0) - remaining) : 0
-    ),
-    rows: items.map(item => ({
-      projectId: item.project.id,
-      title: item.project.title,
-      grade: item.project.grade,
-      participants: item.people,
-      baseStudentCost: item.base,
-      eligibleSchoolCost: item.cap,
-      suggested: suggestions[item.project.id] ?? 0,
-      estimatedBurden: item.people > 0 ? Math.max(0, item.base - (suggestions[item.project.id] ?? 0)) / item.people : 0,
-      fixed: item.fixed,
-      targetBurden: item.targetBurden
-    }))
-  };
 }

@@ -13,7 +13,6 @@ export function renderSchoolPage(school, projects = []) {
   const officeOptions = EDUCATION_OFFICES.map(([value, label]) => `
     <option value="${value}" ${school.educationOffice === value ? 'selected' : ''}>${label}</option>
   `).join('');
-  const assigned = projects.reduce((sum, project) => sum + number(school.projectBudgets?.[project.id]?.amount), 0);
   const budgetRows = projects.map(project => {
     const allocation = school.projectBudgets?.[project.id] ?? {};
     const grade = project.grade ? `${project.grade}학년` : '학년 미지정';
@@ -21,9 +20,6 @@ export function renderSchoolPage(school, projects = []) {
       <td>${escapeHtml(project.title)}<small>${grade}</small></td>
       <td><input type="number" min="0" step="1" name="budgetAmount:${escapeHtml(project.id)}" value="${allocation.amount == null ? '' : number(allocation.amount)}" placeholder="배정 전"></td>
       <td class="center"><input type="checkbox" name="budgetFixed:${escapeHtml(project.id)}" ${allocation.fixed ? 'checked' : ''} aria-label="${escapeHtml(project.title)} 배정 고정"></td>
-      <td><input type="number" min="0" step="1" name="budgetTarget:${escapeHtml(project.id)}" value="${allocation.targetBurden == null ? '' : number(allocation.targetBurden)}" placeholder="공통 목표 사용"></td>
-      <td>${allocation.amount == null ? '미배정' : formatWon(number(allocation.amount))}</td>
-      <td data-school-budget-suggestion>배분안 계산 전</td>
     </tr>`;
   }).join('');
   return `
@@ -40,28 +36,18 @@ export function renderSchoolPage(school, projects = []) {
 
           <label for="schoolQuery">학교명 검색</label>
           <div class="school-search-controls">
-            <input id="schoolQuery" name="schoolQuery" type="search" data-school-search autocomplete="off" placeholder="학교명을 입력하거나 비워 두고 검색하세요">
+            <input id="schoolQuery" name="schoolQuery" type="search" data-school-search autocomplete="off">
             <button type="button" data-action="search-schools">학교 검색</button>
           </div>
         </div>
-        <p id="schoolSearchStatus" class="help" role="status" aria-live="polite">교육지원청을 선택한 뒤 학교를 검색하세요.</p>
+        <p id="schoolSearchStatus" role="status" aria-live="polite"></p>
         <div id="schoolSearchResults" class="school-search-results" role="listbox" aria-label="학교 검색 결과"></div>
       </fieldset>
       <fieldset>
-        <legend>학년별 학교 자체 예산</legend>
-        <p class="help">학년을 사업명에서 추측하지 않습니다. 사업의 업무 흐름에서 학년을 지정한 뒤 배정액과 고정 여부를 입력하세요. 재원별 학교 지원은 사업 배정액을 넘지 않도록 계산합니다.</p>
-        <div class="form-grid school-budget-total-grid">
-          <label for="annualSchoolBudget">학교 전체 가용 예산</label>
-          <input id="annualSchoolBudget" name="annualSchoolBudget" type="number" min="0" step="1" value="${number(school.annualSchoolBudget)}">
-          <label>현재 배정액</label><input readonly value="${assigned}">
-        </div>
-        <div class="table-wrap"><table class="school-budget-table"><thead><tr><th>사업/학년</th><th>배정액</th><th>고정</th><th>목표 비취약 1인 부담</th><th>저장된 배정</th><th>제안 배정 / 예상 부담</th></tr></thead>
-          <tbody>${budgetRows || '<tr><td colspan="6" class="center">먼저 사업을 추가하고 각 사업의 학년을 지정하세요.</td></tr>'}</tbody>
+        <legend>사업별 학교 지원 배정</legend>
+        <div class="table-wrap"><table class="school-budget-table"><thead><tr><th>사업/학년</th><th>배정액</th><th>고정</th></tr></thead>
+          <tbody>${budgetRows || '<tr><td colspan="3" class="center">사업이 없습니다.</td></tr>'}</tbody>
         </table></div>
-        <div class="toolbar">
-          <button type="button" data-action="suggest-school-budget" ${projects.length ? '' : 'disabled'}>배분안 계산</button>
-          <span class="help" data-school-budget-preview>학교 예산을 입력하면 저장 전 배분안을 계산할 수 있습니다.</span>
-        </div>
       </fieldset>
 
       <fieldset>
@@ -88,7 +74,7 @@ export function renderSchoolPage(school, projects = []) {
         </div>
         <div class="school-info-lookup">
           <button type="button" data-action="lookup-school-students">학교알리미 학생수 조회</button>
-          <span id="schoolInfoStatus" class="help" role="status" aria-live="polite">학교를 선택하면 공시 학생수를 자동으로 불러옵니다. 조회값은 확인 후 수정할 수 있습니다.</span>
+          <span id="schoolInfoStatus" class="help" role="status" aria-live="polite"></span>
         </div>
         <input type="hidden" name="schoolCode" value="${escapeHtml(school.schoolCode)}">
         <input type="hidden" name="schoolRegionCode" value="${escapeHtml(school.schoolRegionCode)}">
@@ -104,11 +90,10 @@ export function readSchoolForm(form, previous, projects = []) {
   const projectBudgets = { ...(previous.projectBudgets ?? {}) };
   for (const project of projects) {
     const amountText = data.get(`budgetAmount:${project.id}`);
-    const targetText = data.get(`budgetTarget:${project.id}`);
     projectBudgets[project.id] = {
+      ...(projectBudgets[project.id] ?? {}),
       amount: amountText === null || amountText === '' ? null : Math.max(0, number(amountText)),
-      fixed: data.get(`budgetFixed:${project.id}`) === 'on',
-      targetBurden: targetText === null || targetText === '' ? null : Math.max(0, number(targetText))
+      fixed: data.get(`budgetFixed:${project.id}`) === 'on'
     };
   }
   return {
@@ -123,7 +108,6 @@ export function readSchoolForm(form, previous, projects = []) {
     grade1Students: Math.max(0, number(data.get('grade1Students'))),
     grade2Students: Math.max(0, number(data.get('grade2Students'))),
     grade3Students: Math.max(0, number(data.get('grade3Students'))),
-    annualSchoolBudget: Math.max(0, number(data.get('annualSchoolBudget'))),
     projectBudgets
   };
 }

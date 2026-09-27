@@ -1,4 +1,5 @@
 import { buildProposalLines, calculateWorkflow, reconcileAdministrativeEntries } from '../workflowEngine.js';
+import { FTC_SCHOOL_SCOPE } from '../presets.js';
 
 const xml = value => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;')
   .replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&apos;');
@@ -73,8 +74,8 @@ function projectSettlement(project, school) {
     actual,
     actualComplete,
     grade: plan.grade,
-    schoolLevel: plan.schoolLevel ?? '중',
-    establishment: plan.establishment ?? '공립',
+    schoolLevel: FTC_SCHOOL_SCOPE.schoolLevel,
+    establishment: FTC_SCHOOL_SCOPE.establishment,
     schoolName: school.name ?? '',
     executionMode: plan.executionMode ?? '',
     period: periodLabel(plan),
@@ -317,8 +318,6 @@ function schoolSheet(projects, school) {
     complete ? totals.reduce((sum, item) => sum + money(item.actual.studentUsed), 0) : '실적 미완료',
     complete ? totals.reduce((sum, item) => sum + money(item.actual.studentCost), 0) : '실적 미완료'
   ]);
-  rows.push(['가용 학교 예산', '', '', money(school.annualSchoolBudget), '미배정 잔액',
-    Math.max(0, money(school.annualSchoolBudget) - projects.reduce((sum, project) => sum + money(school.projectBudgets?.[project.id]?.amount), 0)), '']);
   return genericSheet('학년별 학교 예산·부담 비교', ['학년', '사업', '비취약 1인 부담', '학교 예산 배정', '배정 상태', '학교 지원 집행', '학생경비'], rows, [16, 34, 20, 20, 16, 20, 20]);
 }
 

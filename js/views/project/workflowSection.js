@@ -1,10 +1,11 @@
 import { calculateExpense, calculateStaffExpense } from '../../engine.js';
-import { createFundingSource } from '../../presets.js';
+import { createFundingSource, FTC_SCHOOL_SCOPE } from '../../presets.js';
 import { escapeHtml, formatWon, number, uid } from '../../utils.js';
 import {
   buildProposalLines,
   calculateWorkflow,
   compareConfirmedPlan,
+  attendanceInputValues,
   reconcileAdministrativeEntries,
   summarizeAttendance,
   COHORTS
@@ -15,7 +16,7 @@ const count = value => Math.max(0, Math.floor(number(value)));
 
 const groups = [
   ['vulnerable', '취약 참여'], ['regular', '비취약 참여'],
-  ['vulnerableAbsent', '취약 중도취소/당일 불참'], ['regularAbsent', '비취약 중도취소/당일 불참'],
+  ['vulnerableAbsent', '취약 불참'], ['regularAbsent', '비취약 불참'],
   ['unclassified', '구분 미입력 비용']
 ];
 const categories = [
@@ -30,22 +31,26 @@ function numberInput(label, value, key, { blank = false, actual = false } = {}) 
   return `<label class="workflow-field">${label}<input type="number" min="0" step="1" ${attr} value="${blank ? '' : escapeHtml(value ?? '')}"></label>`;
 }
 
-function attendanceFields(value, actual = false) {
-  const blankActual = actual ? value ?? {} : value;
+function attendanceFields(value, totalEnrollment, actual = false) {
+  const fields = attendanceInputValues(value, totalEnrollment);
+  const input = (label, key) => numberInput(label, fields[key], key, {
+    blank: actual && fields[key] === null,
+    actual
+  });
   return `
-    <div class="workflow-count-grid">
-      ${numberInput('재적 인원', value.enrolled, 'enrolled', { blank: actual && blankActual.enrolled == null, actual })}
-      ${numberInput('처음부터 미신청', value.notApplied, 'notApplied', { blank: actual && blankActual.notApplied == null, actual })}
-      ${numberInput('계약 전 취소', value.preContractCanceled, 'preContractCanceled', { blank: actual && blankActual.preContractCanceled == null, actual })}
-      ${numberInput('비용 확정 후 취소', value.postContractCanceled, 'postContractCanceled', { blank: actual && blankActual.postContractCanceled == null, actual })}
-      ${numberInput('당일 불참', value.dayAbsent, 'dayAbsent', { blank: actual && blankActual.dayAbsent == null, actual })}
-      ${numberInput('인솔자', value.chaperones, 'chaperones', { blank: actual && blankActual.chaperones == null, actual })}
-      ${numberInput('취약 재적', value.vulnerableEnrolled, 'vulnerableEnrolled', { blank: actual && blankActual.vulnerableEnrolled == null, actual })}
-      ${numberInput('취약 미신청', value.vulnerableNotApplied, 'vulnerableNotApplied', { blank: actual && blankActual.vulnerableNotApplied == null, actual })}
-      ${numberInput('취약 계약 전 취소', value.vulnerablePreContractCanceled, 'vulnerablePreContractCanceled', { blank: actual && blankActual.vulnerablePreContractCanceled == null, actual })}
-      ${numberInput('취약 비용 확정 후 취소', value.vulnerablePostContractCanceled, 'vulnerablePostContractCanceled', { blank: actual && blankActual.vulnerablePostContractCanceled == null, actual })}
-      ${numberInput('취약 당일 불참', value.vulnerableDayAbsent, 'vulnerableDayAbsent', { blank: actual && blankActual.vulnerableDayAbsent == null, actual })}
-      ${numberInput('고정비 부담 불참', value.fixedCostAbsent, 'fixedCostAbsent', { blank: actual && blankActual.fixedCostAbsent == null, actual })}
+    <div class="workflow-count-sections">
+      <section class="workflow-count-group"><h3>신청 결과</h3><div class="workflow-count-grid">
+        ${input('신청 학생 수', 'applicants')}
+        ${input('인솔자 수', 'chaperones')}
+      </div></section>
+      <section class="workflow-count-group"><h3>취약계층</h3><div class="workflow-count-grid">
+        ${input('취약계층 재적 인원', 'vulnerableEnrolled')}
+        ${input('취약계층 미신청 인원', 'vulnerableNotApplied')}
+      </div></section>
+      <section class="workflow-count-group"><h3>당일 불참</h3><div class="workflow-count-grid">
+        ${input('취약계층 당일 불참 인원', 'vulnerableDayAbsent')}
+        ${input('비취약계층 당일 불참 인원', 'regularDayAbsent')}
+      </div></section>
     </div>`;
 }
 
@@ -93,7 +98,6 @@ function renderCosts(project) {
   const staffRows = (project.staffExpenses ?? []).map(expense => costRow(expense, project, 'staff')).join('');
   return `
     <h2>비용과 실제 집행 입력</h2>
-    <p class="help">같은 비용 행을 체험처/비용 화면과 공유합니다. 계획 단가·계약 총액은 이 화면에서도 수정할 수 있습니다. 실제 금액을 비워 두면 미입력, 0을 입력하면 0원 집행입니다.</p>
     <div class="table-wrap workflow-table-wrap"><table class="workflow-cost-table">
       <thead><tr><th>비용 항목</th><th>분류</th><th>산식</th><th>청구 기준/직접 인원</th><th>단가/계약액</th><th>계획 학생/인솔자 금액</th><th>실제 총액</th><th>환불액</th></tr></thead>
       <tbody>${studentRows || '<tr><td colspan="8" class="center">비용 행은 체험처/비용에서 추가하세요.</td></tr>'}</tbody>
@@ -127,7 +131,7 @@ function sourceCard(source, project) {
     <input type="hidden" data-resource-field="id" value="${escapeHtml(source.id)}">
     <div class="resource-sub-row"><strong>지원 대상</strong>${groupChecks}</div>
     <div class="resource-limit-grid">${limitLabels.map(([key, label]) => `<label>${label}<input type="number" min="0" step="1" data-source-limit="${key}" placeholder="빈칸=실비 전액" value="${source.limits?.[key] == null ? '' : number(source.limits[key])}"></label>`).join('')}</div>
-    <div class="resource-sub-row"><strong>사용 가능 항목</strong><span class="help">모두 해제하면 전체 항목</span>${categoryChecks}</div>
+    <div class="resource-sub-row"><strong>사용 가능 항목 · 미선택 시 전체</strong>${categoryChecks}</div>
     <label class="resource-actual">실제 정산 배분 입력 <input type="number" min="0" step="1" data-resource-field="actualAmount" placeholder="미입력=정책 자동 배분" value="${projectActualAmount(source, project)}"></label>
   </div>`;
 }
@@ -142,7 +146,7 @@ function renderResources(project) {
   const resources = project.workflow?.resources ?? [];
   return `
     <h2>재원 정책과 배정액</h2>
-    <p class="help">빈 한도는 해당 적격 비용의 실비 한도입니다. 0은 미지원입니다. 재원 행은 사업별 정책·목적 예산을 나타내며, 같은 학교 재원의 총액은 학년 예산 배정액으로 다시 제한됩니다. 학생 부담 재원은 학생 부담 합계에 포함됩니다.</p>
+    <p class="help">공란 한도는 실비, 0은 미지원입니다. 학생 부담 재원은 학생 부담 합계에 포함됩니다.</p>
     <div class="resource-list">${resources.map(source => sourceCard(source, project)).join('') || '<p class="empty">등록된 재원이 없습니다. 교육청·학교·외부 지원을 추가하세요. 남은 비용은 학생 부담으로 표시됩니다.</p>'}</div>
     <div class="toolbar no-print"><button type="button" data-action="add-source">재원 추가</button></div>`;
 }
@@ -169,7 +173,6 @@ function manualRow(row, project) {
 function renderManualAllocations(project) {
   const rows = project.workflow?.manualAllocations ?? [];
   return `<h2>수동 재원 배분 조정</h2>
-    <p class="help">자동 배분 우선순위와 다른 금액을 고정할 때 비용·재원·대상별 금액과 사유를 저장합니다. 항목 잔액, 1인 한도, 재원 배정액을 넘는 입력은 적용액과 차이를 표시합니다.</p>
     <div class="table-wrap"><table class="manual-allocation-table"><thead><tr><th>비용</th><th>재원</th><th>대상</th><th>금액</th><th>조정 사유</th><th></th></tr></thead>
     <tbody>${rows.map(row => manualRow(row, project)).join('') || '<tr data-manual-empty><td colspan="6" class="center">수동 조정이 없습니다.</td></tr>'}</tbody></table></div>
     <div class="toolbar no-print"><button type="button" data-action="add-manual-allocation" ${!project.expenses?.length || !project.workflow?.resources?.length ? 'disabled' : ''}>수동 조정 추가</button></div>`;
@@ -248,7 +251,6 @@ function renderFinanceTables(plan, actual, project) {
   ];
   return `
     <h2>품의용 재원별 세부표</h2>
-    <p class="help">행 금액은 정수 원으로 나누어 단가×수량과 일치합니다. 품의 기준 계획은 확정본이 있으면 확정본, 없으면 현재 잠정안입니다.</p>
     <div class="table-wrap"><table class="proposal-table"><thead><tr><th>일자</th><th>항목</th><th>대상</th><th>재원</th><th>인원/수량</th><th>단가</th><th>금액</th><th>산식</th><th>비고</th></tr></thead>
     <tbody>${rows || '<tr><td colspan="9" class="center">비용과 재원을 입력하면 품의 행이 생성됩니다.</td></tr>'}</tbody>
     <tfoot><tr><th colspan="6">품의 학생경비 합계</th><th>${money(planRows.reduce((sum, row) => sum + row.amount, 0))}</th><th colspan="2">원본 비용과 재원 분할 합계</th></tr></tfoot></table></div>
@@ -331,7 +333,6 @@ function renderProposalReference(project, plan) {
   const moneyField = (label, name, value, step = 1) => `<label>${label}<input type="number" min="0" step="${step}" data-proposal-reference="${name}" value="${value == null ? '' : number(value)}"></label>`;
   return `<div class="proposal-reference">
     <h2>운영위원회 제안서 참고값</h2>
-    <p class="help">참고 문서의 수치는 잠정값으로 별도 보존합니다. PDF/JPG는 자동 판독하지 않으므로 확인한 수치와 산식만 입력하고, 아래 비교 결과를 담당자가 검토해 계획을 수정·확정하세요.</p>
     <div class="workflow-business-grid">
       ${textField('문서명/회차', 'documentLabel', reference.documentLabel)}
       ${moneyField('본문 1인당 예상액', 'bodyPerPerson', reference.bodyPerPerson)}
@@ -380,7 +381,7 @@ function renderPrintSummary(project, school, plan, actual) {
     <table class="print-meta"><tbody>
       <tr><th>사업/학년</th><td>${escapeHtml(project.title)} · ${project.grade ? `${project.grade}학년` : '학년 미지정'}</td><th>방식/기간</th><td>${escapeHtml(project.executionMode)} · ${escapeHtml(project.startDate)} ~ ${escapeHtml(project.endDate)} (${number(project.days)}일)</td></tr>
       <tr><th>장소</th><td>${escapeHtml(project.place || '-')}</td><th>참여 인원</th><td>계획 ${planCount.participants}명 (취약 ${planCount.vulnerableParticipants}, 비취약 ${planCount.regularParticipants}) · 실적 ${actualAttendance}</td></tr>
-      <tr><th>학교 예산</th><td>가용 ${money(school.annualSchoolBudget)}원 · 학년 배정 ${schoolBudget?.amount == null ? '미배정' : money(schoolBudget.amount)}원 ${schoolBudget?.fixed ? '(고정)' : ''}</td><th>사업 계획</th><td>${project.workflow?.confirmedPlan ? `${project.workflow.confirmedPlan.revision ?? 1}차 확정본 · ${escapeHtml(project.workflow.confirmedPlan.confirmedAt?.slice(0, 10) ?? '')}` : '잠정 계획'}</td></tr>
+      <tr><th>학교 예산</th><td>사업 배정 ${schoolBudget?.amount == null ? '미배정' : money(schoolBudget.amount)}원 ${schoolBudget?.fixed ? '(고정)' : ''}</td><th>사업 계획</th><td>${project.workflow?.confirmedPlan ? `${project.workflow.confirmedPlan.revision ?? 1}차 확정본 · ${escapeHtml(project.workflow.confirmedPlan.confirmedAt?.slice(0, 10) ?? '')}` : '잠정 계획'}</td></tr>
     </tbody></table>
     <h2>비용 산출 · 취소/환불</h2><table><thead><tr><th>구분</th><th>항목</th><th>계획액</th><th>실제 총액</th><th>환불</th></tr></thead><tbody>${costRows || '<tr><td colspan="5">입력된 비용 없음</td></tr>'}</tbody></table>
     <h2>운영위원회 제안서 참고값</h2>${proposalReferenceComparison(project, plan)}
@@ -398,7 +399,7 @@ function renderPrintSummary(project, school, plan, actual) {
 function renderPlanStatus(project, plan, summary) {
   const planCount = plan.attendance;
   return `<div class="workflow-status-cards">
-    <div><span>신청</span><strong>${planCount.applicants}명</strong><small>계약 ${planCount.contract}명</small></div>
+    <div><span>신청 학생</span><strong>${planCount.applicants}명</strong><small>인솔자 ${planCount.chaperones}명</small></div>
     <div><span>최종 참여</span><strong>${planCount.participants}명</strong><small>취약 ${planCount.vulnerableParticipants} · 비취약 ${planCount.regularParticipants}</small></div>
     <div><span>학생경비</span><strong>${money(plan.studentCost)}</strong><small>잔여 학생부담 ${money(plan.studentUsed)}</small></div>
     <div><span>확정 계획</span><strong>${project.workflow?.confirmedPlan ? `${project.workflow.confirmedPlan.revision ?? 1}차` : '미확정'}</strong><small>${project.workflow?.confirmedPlan?.confirmedAt?.slice(0, 10) ?? '저장 후 확정 가능'}</small></div>
@@ -411,20 +412,17 @@ export function renderWorkflowSection(project, school) {
   const attendance = project.workflow?.attendance ?? {};
   const actualAttendance = project.workflow?.actual?.attendance ?? {};
   const allPlan = project.expenses ?? [];
-  const visiblePlan = summarizeAttendance(attendance);
+  const visiblePlan = summarizeAttendance(attendance, project.totalStudents);
   const planRows = buildProposalLines(plan, project);
   return `
     <section class="workflow-page">
       <h1>현장체험학습 업무 흐름</h1>
-      <p class="section-note">잠정 계획 저장 → 참여·비용 산출 → 품의 계획 확정 → 시행 후 실적 입력 → 행정실 대조 → 정산 출력</p>
       ${renderPlanStatus(project, plan, visiblePlan)}
       <fieldset class="workflow-fieldset">
         <legend>사업과 일정</legend>
         <div class="workflow-business-grid">
           <label>사업명<input name="title" type="text" value="${escapeHtml(project.title)}"></label>
           <label>학년<select name="grade"><option value="">학년 선택</option>${optionList([[1, '1학년'], [2, '2학년'], [3, '3학년']], project.grade)}</select></label>
-          <label>학교 급별<select name="schoolLevel">${optionList([['초', '초등'], ['중', '중등'], ['고', '고등']], project.schoolLevel)}</select></label>
-          <label>설립별<select name="establishment">${optionList([['공립', '공립'], ['사립', '사립']], project.establishment)}</select></label>
           <label>추진 방식<select name="executionMode">${optionList([['숙박형', '숙박형'], ['일일형', '일일형'], ['혼합형', '혼합형']], project.executionMode)}</select></label>
           <label>시작일<input name="startDate" type="date" value="${escapeHtml(project.startDate)}"></label>
           <label>종료일<input name="endDate" type="date" value="${escapeHtml(project.endDate)}"></label>
@@ -434,9 +432,8 @@ export function renderWorkflowSection(project, school) {
       </fieldset>
       <fieldset class="workflow-fieldset">
         <legend>계획 인원 구분</legend>
-        <p class="help">이름을 입력할 필요 없이 같은 상태 인원수만 입력합니다. 비용이 확정된 취소와 당일 불참은 서로 다른 단계로 저장되며, 불참자의 취약 여부도 별도로 입력합니다.</p>
-        ${attendanceFields(attendance)}
-        <p class="workflow-derived">신청 ${visiblePlan.applicants}명 · 계약 비용 대상 ${visiblePlan.contract}명 · 최종 참여 ${visiblePlan.participants}명 · 고정비 부담 불참 ${visiblePlan.fixedCostAbsent}명</p>
+        ${attendanceFields(attendance, project.totalStudents)}
+        <p class="workflow-derived">재적 ${visiblePlan.enrolled}명 · 최종 참여 ${visiblePlan.participants}명 · 취약 ${visiblePlan.vulnerableParticipants}명 · 비취약 ${visiblePlan.regularParticipants}명</p>
       </fieldset>
       <fieldset class="workflow-fieldset">
         <legend>비용 산출과 실제 집행</legend>
@@ -456,8 +453,8 @@ export function renderWorkflowSection(project, school) {
       </fieldset>
       <fieldset class="workflow-fieldset">
         <legend>시행 실적</legend>
-        <p class="help">정산 칸을 비워 두면 미입력으로 남고, 0은 실제 0원입니다. 실적 금액은 계획값으로 자동 대체하지 않습니다. 반납 산출은 교부액과 집행액 차이로 계산하며 실제 반납 완료는 행정실 거래로 기록하세요.</p>
-        ${attendanceFields(actualAttendance, true)}
+        <p class="help">실적 금액은 공란이면 미입력, 0이면 0원 집행입니다. 실제 반납 완료는 행정실 거래에 기록하세요.</p>
+        ${attendanceFields(actualAttendance, project.totalStudents, true)}
         <h3>확정 계획과 실적 차이</h3>
         ${renderPlanComparison(project, school, plan, actual)}
       </fieldset>
@@ -468,7 +465,6 @@ export function renderWorkflowSection(project, school) {
       <fieldset class="workflow-fieldset">
         <legend>검토용 보고와 제출 파일</legend>
         ${renderProposalReference(project, plan)}
-        <p class="help">1인당 평균은 실제 참여 학생 비용 기준이며 집단별 차이는 부속 검토표에 표시합니다.</p>
         <div class="toolbar no-print">
           <button type="button" data-action="copy-proposal" ${planRows.length ? '' : 'disabled'}>품의 표 복사</button>
           <button type="button" data-action="export-workbook">공식 정산 XLSX + 검토표 내보내기</button>
@@ -508,21 +504,35 @@ export function readWorkflowForm(form, previous) {
   const value = name => form.querySelector(`[name="${name}"]`)?.value ?? '';
   next.title = value('title').trim() || next.title;
   next.grade = value('grade') ? Number(value('grade')) : '';
-  next.schoolLevel = value('schoolLevel');
-  next.establishment = value('establishment');
+  next.schoolLevel = FTC_SCHOOL_SCOPE.schoolLevel;
+  next.establishment = FTC_SCHOOL_SCOPE.establishment;
   next.executionMode = value('executionMode');
   next.startDate = value('startDate');
   next.endDate = value('endDate');
   next.days = count(value('days'));
   next.place = value('place').trim();
-  const planAttendance = Object.fromEntries(countFieldsFromForm(form, 'data-attendance-field'));
+  const previousAttendance = next.workflow?.attendance ?? {};
+  const planValues = Object.fromEntries(countFieldsFromForm(form, 'data-attendance-field'));
+  const planAttendance = {
+    schema: 'core-v1',
+    ...planValues,
+    ...((previousAttendance.schema === 'legacy-v5' || previousAttendance.legacyAttendance)
+      ? { legacyAttendance: previousAttendance.legacyAttendance ?? previousAttendance } : {})
+  };
   next.workflow = {
     ...next.workflow,
     attendance: planAttendance,
     proposalReference: readProposalReference(form),
     planChangeReason: value('planChangeReason').trim()
   };
-  const actualAttendance = Object.fromEntries(countFieldsFromForm(form, 'data-actual-count', true));
+  const previousActualAttendance = next.workflow?.actual?.attendance ?? {};
+  const actualValues = Object.fromEntries(countFieldsFromForm(form, 'data-actual-count', true));
+  const actualAttendance = {
+    schema: 'core-v1',
+    ...actualValues,
+    ...((previousActualAttendance.schema === 'legacy-v5' || previousActualAttendance.legacyAttendance)
+      ? { legacyAttendance: previousActualAttendance.legacyAttendance ?? previousActualAttendance } : {})
+  };
   next.workflow.actual = {
     ...next.workflow.actual,
     attendance: actualAttendance,
@@ -619,8 +629,7 @@ export function readWorkflowForm(form, previous) {
       memo: field('memo').value.trim()
     };
   }).filter(Boolean);
-  const summary = summarizeAttendance(planAttendance);
-  next.totalStudents = summary.enrolled;
+  const summary = summarizeAttendance(planAttendance, next.totalStudents);
   next.actualParticipants = summary.participants;
   next.absentStudents = Math.max(0, summary.enrolled - summary.participants);
   next.vulnerableStudents = summary.vulnerableEnrolled;
@@ -649,7 +658,7 @@ function readProposalReference(form) {
 function countFieldsFromForm(form, attribute, nullable = false) {
   return [...form.querySelectorAll(`[${attribute}]`)].map(input => {
     const key = input.getAttribute(attribute);
-    return [key, nullable && input.value === '' ? null : count(input.value)];
+    return [key, input.value === '' ? (nullable ? null : 0) : Number(input.value)];
   });
 }
 

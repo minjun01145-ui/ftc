@@ -16,7 +16,7 @@ function scheduleRowHtml(item) {
 
 function scheduleRowsHtml(items) {
   if (!items.length) {
-    return '<tr data-trip-schedule-empty><td colspan="6" class="center">일정 파일을 참고하거나 일정 항목 추가를 눌러 직접 입력하세요.</td></tr>';
+    return '<tr data-trip-schedule-empty><td colspan="6" class="center">일정이 없습니다.</td></tr>';
   }
   return items.map(scheduleRowHtml).join('');
 }
@@ -28,10 +28,10 @@ export function renderTripScheduleSection(project) {
   return `
     <fieldset class="section-fieldset trip-schedule-section" data-project-section="business" data-trip-schedule-section>
       <legend>체험학습 일정 입력</legend>
-      <p class="section-note">파일은 참고자료로 선택할 수 있습니다. 이 화면은 PDF/JPG 내용을 자동 판독하지 않으므로 일정은 직접 입력해 주세요.</p>
+      <p class="section-note">파일 내용은 자동 입력되지 않습니다. 일정을 직접 입력하세요.</p>
       <div class="toolbar">
-        <input type="file" accept="${TRIP_SCHEDULE_FILE_ACCEPT}" multiple data-trip-schedule-upload>
-        <span class="help" data-trip-schedule-upload-status>PDF 또는 JPG 파일을 선택할 수 있습니다.</span>
+        <input type="file" accept="${TRIP_SCHEDULE_FILE_ACCEPT}" multiple data-trip-schedule-upload aria-label="일정 참고 파일">
+        <span class="help" data-trip-schedule-upload-status></span>
         <span class="spacer"></span>
         <button type="button" data-action="add-schedule-item">일정 항목 추가</button>
         <button type="button" data-action="edit-trip-schedule" ${hasItems ? '' : 'disabled'}>수정</button>

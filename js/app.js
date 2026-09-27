@@ -1,8 +1,7 @@
 import { PROJECT_SECTION, normalizeProjectSection } from './projectSections.js';
 import { createProject } from './presets.js';
-import { buildProposalLines, calculateWorkflow, createConfirmedPlanSnapshot } from './workflowEngine.js';
+import { buildProposalLines, calculateWorkflow, createConfirmedPlanSnapshot, summarizeAttendance } from './workflowEngine.js';
 import { downloadWorkflowWorkbook } from './services/workbookExport.js';
-import { suggestSchoolBudgets } from './workflowEngine.js';
 import { getSchoolStudentCounts, searchSchools } from './services/schoolInfo.js';
 import { validateScheduleFiles } from './services/scheduleUpload.js';
 import { getState, persistState, replaceState, updateState } from './state.js';
@@ -94,33 +93,6 @@ function saveSchool(form) {
   showMessage('저장했습니다.');
 }
 
-function updateSchoolBudgetPreview(form, apply = false) {
-  if (!form || form.id !== 'schoolForm') return;
-  const state = getState();
-  const draftSchool = readSchoolForm(form, state.school, state.projects);
-  const result = suggestSchoolBudgets(state.projects, draftSchool);
-  if (apply) {
-    for (const row of result.rows) {
-      const target = [...form.querySelectorAll('[data-school-budget-row]')]
-        .find(item => item.dataset.projectId === row.projectId)
-        ?.querySelector(`[name="budgetAmount:${row.projectId}"]`);
-      if (target) target.value = String(result.suggestions[row.projectId] ?? 0);
-    }
-  }
-  for (const row of result.rows) {
-    const output = [...form.querySelectorAll('[data-school-budget-row]')]
-      .find(item => item.dataset.projectId === row.projectId)
-      ?.querySelector('[data-school-budget-suggestion]');
-    if (output) output.textContent = `${Math.round(row.suggested).toLocaleString()}원 · 예상 ${Math.round(row.estimatedBurden).toLocaleString()}원/인${row.fixed ? ' · 고정' : ''}`;
-  }
-  const preview = form.querySelector('[data-school-budget-preview]');
-  if (preview) {
-    const over = result.used > number(draftSchool.annualSchoolBudget);
-    const targetText = result.targetBurden == null ? '학년별 목표' : `제안 목표 비취약 부담 ${Math.round(result.targetBurden).toLocaleString()}원`;
-    preview.textContent = `${targetText} · 배정 ${result.used.toLocaleString()}원 · 미배정 ${result.unallocated.toLocaleString()}원${result.shortfall ? ` · 목표 부족 ${result.shortfall.toLocaleString()}원` : ''}${over ? ' · 가용 예산 초과 확인' : ''}`;
-  }
-}
-
 function updateSchoolTotal(form) {
   const totalField = form?.querySelector('#schoolTotalStudents');
   if (!totalField) return;
@@ -199,7 +171,6 @@ async function lookupSchoolStudents(form) {
   const educationOffice = form.querySelector('[name="educationOffice"]').value;
   const schoolCode = form.querySelector('[name="schoolCode"]').value;
   const schoolRegionCode = form.querySelector('[name="schoolRegionCode"]').value;
-  const schoolKindCode = form.querySelector('[name="schoolKindCode"]').value;
   const schoolYearField = form.querySelector('[name="schoolYear"]');
   const requestedSchoolYear = schoolYearField.value;
   const requestedYear = number(requestedSchoolYear);
@@ -212,11 +183,10 @@ async function lookupSchoolStudents(form) {
     && form.querySelector('[name="schoolCode"]').value === schoolCode
     && form.querySelector('[name="educationOffice"]').value === educationOffice
     && form.querySelector('[name="schoolRegionCode"]').value === schoolRegionCode
-    && form.querySelector('[name="schoolKindCode"]').value === schoolKindCode
     && schoolYearField.value === requestedSchoolYear
     && countFields.every((field, index) => field.value === countsAtRequest[index]);
 
-  if (!educationOffice || !schoolCode || !schoolRegionCode || !schoolKindCode) {
+  if (!educationOffice || !schoolCode || !schoolRegionCode) {
     status.textContent = '학교 검색 결과에서 학교를 선택한 뒤 조회해 주세요.';
     return;
   }
@@ -232,7 +202,6 @@ async function lookupSchoolStudents(form) {
       educationOffice,
       schoolCode,
       schoolRegionCode,
-      schoolKindCode,
       reportYear
     });
     if (!requestIsCurrent()) return;
@@ -258,6 +227,13 @@ function saveProject(form, messageText = '저장했습니다.') {
   if (!project) return;
 
   const nextProject = readProjectForm(form, project);
+  if (form.querySelector('[name="totalStudents"]')) {
+    const issues = summarizeAttendance(nextProject.workflow?.attendance ?? {}, nextProject.totalStudents).issues;
+    if (issues.length) {
+      showMessage(issues[0]);
+      return;
+    }
+  }
   updateState(next => {
     const index = next.projects.findIndex(item => item.id === currentPage.projectId);
     if (index >= 0) next.projects[index] = nextProject;
@@ -272,6 +248,14 @@ function saveWorkflow(form, messageText = '업무 흐름을 저장했습니다.'
   const project = state.projects.find(item => item.id === currentPage.projectId);
   if (!project) return null;
   const nextProject = readWorkflowForm(form, project);
+  const attendanceIssues = [
+    ...summarizeAttendance(nextProject.workflow.attendance, nextProject.totalStudents).issues,
+    ...summarizeAttendance(nextProject.workflow.actual.attendance, nextProject.totalStudents).issues
+  ];
+  if (attendanceIssues.length) {
+    showMessage(attendanceIssues[0]);
+    return null;
+  }
   updateState(next => {
     const index = next.projects.findIndex(item => item.id === currentPage.projectId);
     if (index >= 0) next.projects[index] = nextProject;
@@ -287,6 +271,14 @@ function confirmWorkflowPlan(form) {
   const current = state.projects.find(item => item.id === currentPage.projectId);
   if (!current) return;
   const nextProject = readWorkflowForm(form, current);
+  const attendanceIssues = [
+    ...summarizeAttendance(nextProject.workflow.attendance, nextProject.totalStudents).issues,
+    ...summarizeAttendance(nextProject.workflow.actual.attendance, nextProject.totalStudents).issues
+  ];
+  if (attendanceIssues.length) {
+    showMessage(attendanceIssues[0]);
+    return;
+  }
   const snapshot = createConfirmedPlanSnapshot(nextProject, state.school);
   const revision = (nextProject.workflow.confirmedPlans?.length ?? 0) + 1;
   snapshot.revision = revision;
@@ -397,10 +389,6 @@ main.addEventListener('input', event => {
       && ['grade1Students', 'grade2Students', 'grade3Students'].includes(target.name)) {
     updateSchoolTotal(target.form);
   }
-  if (target.form?.id === 'schoolForm'
-      && (target.name === 'annualSchoolBudget' || target.name.startsWith('budgetAmount:') || target.name.startsWith('budgetTarget:'))) {
-    updateSchoolBudgetPreview(target.form);
-  }
   if (target.dataset.detailField !== undefined) {
     const editor = target.closest('[data-expense-detail-editor]');
     const tbody = target.closest('tbody');
@@ -469,12 +457,6 @@ main.addEventListener('click', event => {
   const tbody = expenseSection?.querySelector('[data-expense-table]');
   const row = button.closest('[data-expense-row]');
   const expenseId = row?.dataset.expenseId ?? button.dataset.expenseId ?? '';
-
-  if (action === 'suggest-school-budget' && form?.id === 'schoolForm') {
-    updateSchoolBudgetPreview(form, true);
-    dirty = true;
-    return;
-  }
 
   if (action === 'search-schools' && form?.id === 'schoolForm') {
     void searchSchoolDirectory(form, button);
