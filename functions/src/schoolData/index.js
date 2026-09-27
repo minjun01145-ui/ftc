@@ -104,7 +104,7 @@ export async function findStudentCounts({
   const apiKey = getSchoolInfoApiKey(secretValue);
   if (!apiKey) throw new SchoolDataError(503, 'SCHOOLINFO_KEY_MISSING', '학교알리미 OpenAPI 키가 서버에 설정되지 않았습니다.');
 
-  const schoolInfoContext = { apiKey, regionCode: region.code, kindCode: kind.code };
+  const schoolInfoContext = { apiKey, regionCode: region.code, kindCode: kind.kindCode };
   const [basicRows, studentRows] = await Promise.all([
     getSchoolInfoBasicRows(schoolInfoContext),
     getSchoolInfoStudentRows({ ...schoolInfoContext, reportYear })
@@ -120,14 +120,14 @@ export async function findStudentCounts({
     throw new SchoolDataError(404, 'SCHOOLINFO_DATA_NOT_FOUND', `${reportYear}년 학교알리미 공시자료가 없습니다. 공시연도를 바꾸거나 학생수를 직접 입력해 주세요.`);
   }
 
-  const counts = readStudentCounts(row, kind.code);
+  const counts = readStudentCounts(row, kind.kindCode);
   if (Object.values(counts).some(value => value === null)) {
     throw new SchoolDataError(422, 'SCHOOLINFO_COUNT_INCOMPLETE', '학교알리미에서 1~3학년 학생수를 모두 확인하지 못했습니다. 누락된 값은 직접 입력해 주세요.');
   }
 
   return {
     schoolName: String(school.SCHUL_NM ?? ''),
-    schoolType: kind.label,
+    schoolType: kind.kindLabel,
     reportYear,
     counts
   };
