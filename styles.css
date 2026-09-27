@@ -345,3 +345,112 @@ table input[type="text"] { min-width: 150px; }
 @media print {
   .project-submenu { display: none !important; }
 }
+
+.workflow-page { max-width: 1500px; }
+.workflow-fieldset { margin-bottom: 16px; }
+.workflow-fieldset > legend { font-size: 15px; }
+.workflow-status-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+  gap: 8px;
+  margin: 10px 0 16px;
+}
+.workflow-status-cards > div, .finance-summary-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid #aab3bd;
+  background: #f7f9fb;
+  padding: 9px 11px;
+}
+.workflow-status-cards span, .finance-summary-grid strong { color: #4a5562; font-size: 12px; font-weight: normal; }
+.workflow-status-cards strong, .finance-summary-grid span { font-size: 16px; }
+.workflow-status-cards small { color: #555; }
+.workflow-business-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  gap: 9px 14px;
+}
+.workflow-business-grid label, .resource-main-row label, .resource-limit-grid label, .workflow-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.workflow-business-grid .wide-field { grid-column: span 2; }
+.workflow-count-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+  gap: 8px 12px;
+  max-width: 1050px;
+}
+.workflow-count-grid input { width: 100%; }
+.workflow-derived { margin-top: 12px; padding: 8px; border-top: 1px solid #bbb; font-weight: bold; }
+.workflow-page h2 { margin-top: 18px; }
+.workflow-page h3 { margin: 14px 0 6px; font-size: 14px; }
+.workflow-table-wrap { margin: 8px 0; }
+.workflow-cost-table { min-width: 1130px; }
+.workflow-cost-table td:first-child { min-width: 150px; white-space: normal; }
+.workflow-cost-table td small { display: block; color: #777; font-size: 10px; }
+.workflow-cost-table input, .workflow-cost-table select { min-width: 100px; }
+.workflow-cost-table .compact-number { min-width: 75px; margin-top: 3px; }
+.custom-cohort-grid { display: grid; grid-template-columns: repeat(5, minmax(115px, 1fr)); gap: 8px; }
+.custom-cohort-grid label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; }
+.custom-cohort-grid input { min-width: 80px; }
+.custom-cohort-row td { background: #f7f9fb; }
+.resource-list { display: grid; gap: 10px; }
+.resource-card { border: 1px solid #aab3bd; padding: 10px; background: #fafbfd; }
+.resource-main-row { display: grid; grid-template-columns: minmax(180px, 2fr) minmax(120px, 1fr) minmax(150px, 1fr) 100px auto auto; gap: 9px; align-items: end; }
+.resource-sub-row { display: flex; align-items: center; flex-wrap: wrap; gap: 7px 13px; margin-top: 8px; }
+.resource-sub-row strong { min-width: 92px; font-size: 12px; }
+.mini-check { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.mini-check input { margin: 0; }
+.resource-limit-grid { display: grid; grid-template-columns: repeat(5, minmax(145px, 1fr)); gap: 8px; margin-top: 10px; }
+.resource-limit-grid label, .resource-actual { font-size: 11px; color: #4b5561; }
+.resource-actual { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.resource-actual input { max-width: 180px; }
+.finance-summary-grid { display: grid; grid-template-columns: repeat(3, minmax(160px, 1fr)); gap: 8px; margin-top: 12px; }
+.workflow-confirm-row { display: flex; align-items: end; flex-wrap: wrap; gap: 8px; margin-top: 12px; padding: 10px; border: 1px solid #b5bfca; background: #f7f9fb; }
+.workflow-confirm-row label { display: flex; flex-direction: column; gap: 4px; min-width: 260px; }
+.proposal-reference { margin: 12px 0; padding: 10px; border: 1px solid #aab3bd; background: #fafbfd; }
+.proposal-reference .workflow-business-grid { margin: 8px 0; }
+.proposal-reference input { width: 100%; }
+.workflow-review-columns { display: grid; grid-template-columns: minmax(400px, 1.3fr) minmax(300px, 1fr); gap: 18px; }
+.workflow-print-heading, .workflow-print-only { display: none; }
+.reconciliation-table td { white-space: normal; }
+.delta { color: #8b0000; }
+
+@media (max-width: 900px) {
+  .workflow-count-grid { grid-template-columns: repeat(2, minmax(140px, 1fr)); }
+  .workflow-business-grid { grid-template-columns: repeat(2, minmax(150px, 1fr)); }
+  .resource-limit-grid { grid-template-columns: repeat(2, minmax(140px, 1fr)); }
+  .workflow-review-columns { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 650px) {
+  .workflow-status-cards { grid-template-columns: repeat(2, minmax(130px, 1fr)); }
+  .workflow-business-grid { grid-template-columns: 1fr; }
+  .workflow-business-grid .wide-field { grid-column: auto; }
+  .workflow-count-grid { grid-template-columns: repeat(2, minmax(125px, 1fr)); }
+  .finance-summary-grid { grid-template-columns: repeat(2, minmax(130px, 1fr)); }
+  .resource-main-row { grid-template-columns: 1fr 1fr; }
+  .resource-limit-grid { grid-template-columns: 1fr 1fr; }
+  .custom-cohort-grid { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+}
+
+@media print {
+  @page { size: A4 landscape; margin: 9mm; }
+  html, body, #layout, #main { height: auto; min-height: 0; background: #fff; }
+  #main { padding: 0; overflow: visible; }
+  .workflow-page > *:not(.workflow-print-only) { display: none !important; }
+  .workflow-print-only { display: block !important; font-size: 9pt; }
+  .workflow-print-only h1 { font-size: 16pt; margin-bottom: 8pt; }
+  .workflow-print-only h2 { margin: 10pt 0 4pt; font-size: 11pt; break-after: avoid; }
+  .workflow-print-only p { margin: 4pt 0; }
+  .workflow-print-only table { min-width: 0; width: 100%; table-layout: fixed; font-size: 8pt; }
+  .workflow-print-only th, .workflow-print-only td { padding: 3pt; white-space: normal; overflow-wrap: anywhere; }
+  .workflow-print-only thead { display: table-header-group; }
+  .workflow-print-only tr { break-inside: avoid; }
+  .print-meta { margin-bottom: 8pt; }
+  .print-meta th { width: 12%; }
+  .print-meta td { width: 38%; }
+}

@@ -1,5 +1,8 @@
 import { PROJECT_SECTION, normalizeProjectSection } from './projectSections.js';
 import { createProject } from './presets.js';
+import { buildProposalLines, calculateWorkflow, createConfirmedPlanSnapshot } from './workflowEngine.js';
+import { downloadWorkflowWorkbook } from './services/workbookExport.js';
+import { suggestSchoolBudgets } from './workflowEngine.js';
 import { getSchoolStudentCounts, searchSchools } from './services/schoolInfo.js';
 import { validateScheduleFiles } from './services/scheduleUpload.js';
 import { getState, persistState, replaceState, updateState } from './state.js';
@@ -19,7 +22,8 @@ import {
   updateExpenseRowButtons
 } from './views/expenseTable.js';
 import { readProjectForm, renderProjectPage } from './views/projectView.js';
-import { readTripScheduleSection, setTripScheduleEditing, updateTripScheduleUploadStatus } from './views/project/tripScheduleSection.js';
+import { newAdminRowHtml, newManualRowHtml, newSourceRowHtml, readWorkflowForm } from './views/project/workflowSection.js';
+import { newTripScheduleRowHtml, readTripScheduleSection, setTripScheduleEditing, updateTripScheduleUploadStatus } from './views/project/tripScheduleSection.js';
 import { renderProjectList } from './views/sidebarView.js';
 import { readSchoolForm, renderSchoolPage } from './views/schoolView.js';
 
@@ -36,7 +40,7 @@ let dirty = false;
 let messageTimer;
 let schoolSearchRequestId = 0;
 
-function projectPage(projectId, section = PROJECT_SECTION.BUSINESS) {
+function projectPage(projectId, section = PROJECT_SECTION.WORKFLOW) {
   return { type: 'project', projectId, section: normalizeProjectSection(section) };
 }
 
@@ -58,7 +62,7 @@ function render() {
   const state = getState();
 
   if (currentPage.type === 'school') {
-    main.innerHTML = renderSchoolPage(state.school);
+    main.innerHTML = renderSchoolPage(state.school, state.projects);
     dirty = false;
     return;
   }
@@ -83,11 +87,38 @@ function canDiscardChanges() {
 
 function saveSchool(form) {
   const state = getState();
-  const school = readSchoolForm(form, state.school);
+  const school = readSchoolForm(form, state.school, state.projects);
   updateState(next => { next.school = school; });
   persistState();
   render();
   showMessage('저장했습니다.');
+}
+
+function updateSchoolBudgetPreview(form, apply = false) {
+  if (!form || form.id !== 'schoolForm') return;
+  const state = getState();
+  const draftSchool = readSchoolForm(form, state.school, state.projects);
+  const result = suggestSchoolBudgets(state.projects, draftSchool);
+  if (apply) {
+    for (const row of result.rows) {
+      const target = [...form.querySelectorAll('[data-school-budget-row]')]
+        .find(item => item.dataset.projectId === row.projectId)
+        ?.querySelector(`[name="budgetAmount:${row.projectId}"]`);
+      if (target) target.value = String(result.suggestions[row.projectId] ?? 0);
+    }
+  }
+  for (const row of result.rows) {
+    const output = [...form.querySelectorAll('[data-school-budget-row]')]
+      .find(item => item.dataset.projectId === row.projectId)
+      ?.querySelector('[data-school-budget-suggestion]');
+    if (output) output.textContent = `${Math.round(row.suggested).toLocaleString()}원 · 예상 ${Math.round(row.estimatedBurden).toLocaleString()}원/인${row.fixed ? ' · 고정' : ''}`;
+  }
+  const preview = form.querySelector('[data-school-budget-preview]');
+  if (preview) {
+    const over = result.used > number(draftSchool.annualSchoolBudget);
+    const targetText = result.targetBurden == null ? '학년별 목표' : `제안 목표 비취약 부담 ${Math.round(result.targetBurden).toLocaleString()}원`;
+    preview.textContent = `${targetText} · 배정 ${result.used.toLocaleString()}원 · 미배정 ${result.unallocated.toLocaleString()}원${result.shortfall ? ` · 목표 부족 ${result.shortfall.toLocaleString()}원` : ''}${over ? ' · 가용 예산 초과 확인' : ''}`;
+  }
 }
 
 function updateSchoolTotal(form) {
@@ -236,6 +267,42 @@ function saveProject(form, messageText = '저장했습니다.') {
   showMessage(messageText);
 }
 
+function saveWorkflow(form, messageText = '업무 흐름을 저장했습니다.') {
+  const state = getState();
+  const project = state.projects.find(item => item.id === currentPage.projectId);
+  if (!project) return null;
+  const nextProject = readWorkflowForm(form, project);
+  updateState(next => {
+    const index = next.projects.findIndex(item => item.id === currentPage.projectId);
+    if (index >= 0) next.projects[index] = nextProject;
+  });
+  persistState();
+  render();
+  showMessage(messageText);
+  return getState().projects.find(item => item.id === currentPage.projectId) ?? null;
+}
+
+function confirmWorkflowPlan(form) {
+  const state = getState();
+  const current = state.projects.find(item => item.id === currentPage.projectId);
+  if (!current) return;
+  const nextProject = readWorkflowForm(form, current);
+  const snapshot = createConfirmedPlanSnapshot(nextProject, state.school);
+  const revision = (nextProject.workflow.confirmedPlans?.length ?? 0) + 1;
+  snapshot.revision = revision;
+  snapshot.changeReason = nextProject.workflow.planChangeReason;
+  nextProject.workflow.confirmedPlans = [...(nextProject.workflow.confirmedPlans ?? []), snapshot];
+  nextProject.workflow.activeConfirmedPlanId = snapshot.id;
+  nextProject.workflow.confirmedPlan = snapshot;
+  updateState(next => {
+    const index = next.projects.findIndex(item => item.id === currentPage.projectId);
+    if (index >= 0) next.projects[index] = nextProject;
+  });
+  persistState();
+  render();
+  showMessage(`품의용 확정 계획 ${revision}차를 저장했습니다. 이전 확정본도 보존했습니다.`);
+}
+
 function saveTripSchedule(form) {
   const state = getState();
   const project = state.projects.find(item => item.id === currentPage.projectId);
@@ -285,10 +352,7 @@ projectList.addEventListener('click', event => {
 
 addProjectBtn.addEventListener('click', () => {
   if (!canDiscardChanges()) return;
-  const title = prompt('사업명을 입력하세요.\n예: 2026학년도 2학년 수학여행');
-  if (!title?.trim()) return;
-
-  const project = createProject(title.trim());
+  const project = createProject();
   updateState(state => { state.projects.push(project); });
   persistState();
   currentPage = projectPage(project.id);
@@ -299,7 +363,8 @@ main.addEventListener('submit', event => {
   event.preventDefault();
   const form = event.target;
   if (form.id === 'schoolForm') saveSchool(form);
-  if (form.id === 'projectForm') saveProject(form);
+  if (form.id === 'projectForm' && form.dataset.projectView === PROJECT_SECTION.WORKFLOW) saveWorkflow(form);
+  else if (form.id === 'projectForm') saveProject(form);
 });
 
 main.addEventListener('keydown', event => {
@@ -332,10 +397,21 @@ main.addEventListener('input', event => {
       && ['grade1Students', 'grade2Students', 'grade3Students'].includes(target.name)) {
     updateSchoolTotal(target.form);
   }
+  if (target.form?.id === 'schoolForm'
+      && (target.name === 'annualSchoolBudget' || target.name.startsWith('budgetAmount:') || target.name.startsWith('budgetTarget:'))) {
+    updateSchoolBudgetPreview(target.form);
+  }
   if (target.dataset.detailField !== undefined) {
     const editor = target.closest('[data-expense-detail-editor]');
     const tbody = target.closest('tbody');
     if (editor && tbody) syncExpenseDetailAvailability(tbody, editor.dataset.expenseDetailEditor);
+  }
+  if (target.matches('[data-cost-field="quantityBase"]')) {
+    const row = target.closest('[data-cost-row]');
+    const direct = row?.nextElementSibling;
+    if (direct?.matches('[data-custom-row]')) direct.hidden = target.value !== 'custom';
+    const quantity = row?.querySelector('[data-cost-field="customQuantity"]');
+    if (quantity) quantity.disabled = target.value !== 'custom';
   }
 });
 
@@ -394,6 +470,12 @@ main.addEventListener('click', event => {
   const row = button.closest('[data-expense-row]');
   const expenseId = row?.dataset.expenseId ?? button.dataset.expenseId ?? '';
 
+  if (action === 'suggest-school-budget' && form?.id === 'schoolForm') {
+    updateSchoolBudgetPreview(form, true);
+    dirty = true;
+    return;
+  }
+
   if (action === 'search-schools' && form?.id === 'schoolForm') {
     void searchSchoolDirectory(form, button);
     return;
@@ -426,8 +508,105 @@ main.addEventListener('click', event => {
     return;
   }
 
+  if (action === 'add-schedule-item') {
+    const section = button.closest('[data-trip-schedule-section]');
+    const tbody = section?.querySelector('tbody');
+    if (!tbody) return;
+    tbody.querySelector('[data-trip-schedule-empty]')?.remove();
+    tbody.insertAdjacentHTML('beforeend', newTripScheduleRowHtml());
+    setTripScheduleEditing(section, true);
+    dirty = true;
+    return;
+  }
+
   if (action === 'save-trip-schedule' && form) {
     saveTripSchedule(form);
+    return;
+  }
+
+  if (action === 'save-workflow' && form?.dataset.projectView === PROJECT_SECTION.WORKFLOW) {
+    saveWorkflow(form);
+    return;
+  }
+
+  if (action === 'confirm-plan' && form?.dataset.projectView === PROJECT_SECTION.WORKFLOW) {
+    confirmWorkflowPlan(form);
+    return;
+  }
+
+  if (action === 'add-source' && form?.dataset.projectView === PROJECT_SECTION.WORKFLOW) {
+    form.querySelector('.resource-list')?.insertAdjacentHTML('beforeend', newSourceRowHtml());
+    form.querySelector('.resource-list .empty')?.remove();
+    dirty = true;
+    return;
+  }
+
+  if (action === 'delete-source' && form?.dataset.projectView === PROJECT_SECTION.WORKFLOW) {
+    button.closest('[data-resource-row]')?.remove();
+    dirty = true;
+    return;
+  }
+
+  if (action === 'add-admin-entry' && form?.dataset.projectView === PROJECT_SECTION.WORKFLOW) {
+    const tbody = form.querySelector('.admin-entry-table tbody');
+    tbody?.querySelector('[data-admin-empty]')?.remove();
+    tbody?.insertAdjacentHTML('beforeend', newAdminRowHtml(getState().projects.find(item => item.id === currentPage.projectId)));
+    dirty = true;
+    return;
+  }
+
+  if (action === 'delete-admin-entry' && form?.dataset.projectView === PROJECT_SECTION.WORKFLOW) {
+    button.closest('[data-admin-row]')?.remove();
+    dirty = true;
+    return;
+  }
+
+  if (action === 'add-manual-allocation' && form?.dataset.projectView === PROJECT_SECTION.WORKFLOW) {
+    const project = getState().projects.find(item => item.id === currentPage.projectId);
+    const tbody = form.querySelector('.manual-allocation-table tbody');
+    if (project && tbody) {
+      tbody.querySelector('[data-manual-empty]')?.remove();
+      tbody.insertAdjacentHTML('beforeend', newManualRowHtml(project));
+      dirty = true;
+    }
+    return;
+  }
+
+  if (action === 'delete-manual-allocation' && form?.dataset.projectView === PROJECT_SECTION.WORKFLOW) {
+    button.closest('[data-manual-row]')?.remove();
+    dirty = true;
+    return;
+  }
+
+  if (action === 'copy-proposal' && form?.dataset.projectView === PROJECT_SECTION.WORKFLOW) {
+    if (dirty) { alert('복사하기 전에 먼저 저장해 주세요.'); return; }
+    const project = getState().projects.find(item => item.id === currentPage.projectId);
+    const state = getState();
+    const lines = project?.workflow?.confirmedPlan?.proposalLines
+      ?? (project ? buildProposalLines(calculateWorkflow(project, state.school), project) : []);
+    const header = ['일자', '항목', '대상', '재원', '수량', '단가(원)', '금액(원)', '산식', '비고'];
+    const body = lines.map(row => [row.date, row.name, row.group, row.source, row.quantity, row.unitAmount, row.amount, row.calculation, row.note]);
+    navigator.clipboard.writeText([header, ...body].map(row => row.join('\t')).join('\n'))
+      .then(() => showMessage('품의용 표를 복사했습니다.'))
+      .catch(error => showMessage(`표 복사에 실패했습니다: ${error.message}`));
+    return;
+  }
+
+  if (action === 'export-workbook' && form?.dataset.projectView === PROJECT_SECTION.WORKFLOW) {
+    if (dirty) { alert('파일 출력 전에 먼저 저장해 주세요.'); return; }
+    try {
+      const state = getState();
+      downloadWorkflowWorkbook(state.projects, state.school);
+      showMessage('공식 정산서와 검토 시트를 만들었습니다.');
+    } catch (error) {
+      showMessage(`XLSX 생성 실패: ${error.message}`);
+    }
+    return;
+  }
+
+  if (action === 'print-workflow' && form?.dataset.projectView === PROJECT_SECTION.WORKFLOW) {
+    if (dirty) { alert('인쇄하기 전에 먼저 저장해 주세요.'); return; }
+    window.print();
     return;
   }
 

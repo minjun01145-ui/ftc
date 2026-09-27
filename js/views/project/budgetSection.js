@@ -26,6 +26,9 @@ export function renderBudgetSection(project, { includePlanResults = true } = {})
         <label for="regularPerPerson">교육청 지원금(비취약계층 1인당)</label>
         <input id="regularPerPerson" name="regularPerPerson" type="number" min="0" value="${number(project.educationSupport.regularPerPerson)}">
 
+        <label for="grantTotal">교육청 교부액</label>
+        <input id="grantTotal" name="grantTotal" type="number" min="0" placeholder="미입력" value="${project.educationSupport.grantTotal ?? ''}">
+
         <label for="vulnerablePerPerson">교육청 지원금(취약계층 1인당)</label>
         <div class="input-with-option">
           <input id="vulnerablePerPerson" name="vulnerablePerPerson" type="number" min="0"

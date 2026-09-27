@@ -22,7 +22,7 @@ test('기존 저장 데이터에는 빈 체험학습 일정 모델을 보완한�
     projects: [{ title: '기존 사업', expenses: [{ id: 'expense-1', name: '차량비' }] }]
   });
 
-  assert.equal(state.schemaVersion, 4);
+  assert.equal(state.schemaVersion, 5);
   assert.deepEqual(state.projects[0].tripSchedule, { items: [] });
   assert.equal(state.projects[0].expenses[0].sourceScheduleItemId, null);
 });
@@ -80,21 +80,22 @@ test('일정 업로드는 PDF와 JPG만 허용한다', () => {
   assert.deepEqual(result.rejected.map(file => file.name), ['capture.png']);
 });
 
-test('사업정보 일정 화면은 업로드 안내와 읽기 전용 자동입력 미리보기를 제공한다', () => {
+test('사업정보 일정 화면은 자동 판독 한계와 직접 입력 경로를 제공한다', () => {
   const html = renderTripScheduleSection({ tripSchedule: { items: [scheduleItem] } });
 
-  assert.match(html, /체험학습의 전체 일정을 업로드해 주세요\. 자동으로 계획을 입력합니다/);
+  assert.match(html, /자동 판독하지 않으므로 일정은 직접 입력해 주세요/);
   assert.match(html, /accept="\.pdf,\.jpg,\.jpeg,application\/pdf,image\/jpeg"/);
   assert.match(html, /data-schedule-field="name"[^>]*value="박물관"[^>]*readonly/);
+  assert.match(html, /data-action="add-schedule-item"/);
   assert.match(html, /data-action="edit-trip-schedule"/);
   assert.match(html, /data-action="save-trip-schedule"/);
 });
 
-test('사업 상위 항목을 누르면 사업정보가 기본 목적지가 된다', () => {
+test('사업 상위 항목을 누르면 업무 흐름이 기본 목적지가 된다', () => {
   const html = renderProjectList(
     [{ id: 'project-1', title: '수학여행' }],
     { type: 'school', projectId: null, section: null }
   );
 
-  assert.match(html, /class="project-item [^"]*"[\s\S]*data-project-section="business"/);
+  assert.match(html, /class="project-item [^"]*"[\s\S]*data-project-section="workflow"/);
 });

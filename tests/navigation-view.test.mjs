@@ -7,9 +7,9 @@ import { renderProjectList } from '../js/views/sidebarView.js';
 
 const school = { name: '테스트중학교' };
 
-test('사업 하위메뉴는 요청한 7개 항목을 고정 순서로 제공한다', () => {
+test('사업 하위메뉴는 업무 흐름과 기존 7개 화면을 제공한다', () => {
   assert.deepEqual(PROJECT_SECTION_ITEMS.map(item => item.label), [
-    '전체보기', '사업정보', '인원', '체험처/비용', '예산 관리', '리포트 보기', '정산'
+    '업무 흐름', '전체보기', '사업정보', '인원', '체험처/비용', '예산 관리', '리포트 보기', '정산'
   ]);
   assert.equal(normalizeProjectSection('없는메뉴'), PROJECT_SECTION.OVERVIEW);
 });

@@ -1,4 +1,5 @@
 export const PROJECT_SECTION = Object.freeze({
+  WORKFLOW: 'workflow',
   OVERVIEW: 'overview',
   BUSINESS: 'business',
   HEADCOUNT: 'headcount',
@@ -9,6 +10,7 @@ export const PROJECT_SECTION = Object.freeze({
 });
 
 export const PROJECT_SECTION_ITEMS = Object.freeze([
+  { key: PROJECT_SECTION.WORKFLOW, label: '업무 흐름' },
   { key: PROJECT_SECTION.OVERVIEW, label: '전체보기' },
   { key: PROJECT_SECTION.BUSINESS, label: '사업정보' },
   { key: PROJECT_SECTION.HEADCOUNT, label: '인원' },

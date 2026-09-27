@@ -19,7 +19,7 @@ export function renderProjectList(projects, currentPage) {
         <button type="button"
           class="project-item ${activeProject ? 'active' : ''}"
           data-project-id="${escapeHtml(project.id)}"
-          data-project-section="${PROJECT_SECTION.BUSINESS}"
+          data-project-section="${PROJECT_SECTION.WORKFLOW}"
           aria-expanded="${activeProject ? 'true' : 'false'}">${escapeHtml(project.title)}</button>
         ${submenu}
       </div>`;

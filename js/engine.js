@@ -20,11 +20,15 @@ export function projectCounts(project) {
     total,
     participants,
     absent,
-    participantsPlusAbsent: participants + absent,
+    participantsPlusAbsent: participants + Math.max(0, project.contractedAbsentStudents == null ? absent : number(project.contractedAbsentStudents)),
     vulnerableParticipants,
     vulnerableAbsent,
     regularParticipants,
-    regularAbsent,
+    regularAbsent: Math.max(0, project.regularContractedAbsent == null ? regularAbsent : number(project.regularContractedAbsent)),
+    contractedAbsent: Math.max(0, project.contractedAbsentStudents == null ? absent : number(project.contractedAbsentStudents)),
+    vulnerableContractedAbsent: Math.max(0, project.vulnerableContractedAbsent == null ? vulnerableAbsent : number(project.vulnerableContractedAbsent)),
+    regularContractedAbsent: Math.max(0, project.regularContractedAbsent == null ? regularAbsent : number(project.regularContractedAbsent)),
+    fixedCostAbsent: Math.max(0, number(project.fixedCostAbsentStudents)),
     chaperones: Math.max(0, number(project.chaperones))
   };
 }
@@ -33,85 +37,122 @@ export function quantityFor(expense, project) {
   const c = projectCounts(project);
   if (expense.quantityBase === 'totalStudents') return c.total;
   if (expense.quantityBase === 'participantsPlusAbsent') return c.participantsPlusAbsent;
+  if (expense.quantityBase === 'fixedCostAbsent') return c.participants + c.fixedCostAbsent;
   if (expense.quantityBase === 'custom') return Math.max(0, number(expense.customQuantity));
   return c.participants;
 }
 
-function cohortQuantities(expense, project) {
+export function expenseCohortQuantities(expense, project) {
   const c = projectCounts(project);
   if (expense.quantityBase === 'participantsPlusAbsent') {
     return {
       regular: c.regularParticipants,
       vulnerable: c.vulnerableParticipants,
-      regularAbsent: c.regularAbsent,
-      vulnerableAbsent: c.vulnerableAbsent
+      regularAbsent: c.regularContractedAbsent,
+      vulnerableAbsent: c.vulnerableContractedAbsent,
+      unclassified: 0
     };
+  }
+  if (expense.quantityBase === 'fixedCostAbsent') {
+    return { regular: c.regularParticipants, vulnerable: c.vulnerableParticipants, regularAbsent: 0, vulnerableAbsent: 0, unclassified: c.fixedCostAbsent };
   }
   if (expense.quantityBase === 'totalStudents') {
     const known = c.participantsPlusAbsent;
     const extra = Math.max(0, c.total - known);
     return {
-      regular: c.regularParticipants + extra,
+      regular: c.regularParticipants,
       vulnerable: c.vulnerableParticipants,
-      regularAbsent: c.regularAbsent,
-      vulnerableAbsent: c.vulnerableAbsent
+      regularAbsent: c.regularContractedAbsent,
+      vulnerableAbsent: c.vulnerableContractedAbsent,
+      unclassified: extra
     };
   }
   if (expense.quantityBase === 'custom') {
     const q = quantityFor(expense, project);
-    const ratio = c.participants > 0 ? q / c.participants : 0;
-    return {
-      regular: c.regularParticipants * ratio,
-      vulnerable: c.vulnerableParticipants * ratio,
-      regularAbsent: 0,
-      vulnerableAbsent: 0
-    };
+    const custom = expense.customCohorts;
+    if (custom && Object.values(custom).reduce((sum, value) => sum + Math.max(0, number(value)), 0) === q) {
+      return {
+        regular: Math.max(0, number(custom.regular)),
+        vulnerable: Math.max(0, number(custom.vulnerable)),
+        regularAbsent: Math.max(0, number(custom.regularAbsent)),
+        vulnerableAbsent: Math.max(0, number(custom.vulnerableAbsent)),
+        unclassified: Math.max(0, number(custom.unclassified))
+      };
+    }
+    return { regular: 0, vulnerable: 0, regularAbsent: 0, vulnerableAbsent: 0, unclassified: q };
   }
   return {
     regular: c.regularParticipants,
     vulnerable: c.vulnerableParticipants,
     regularAbsent: 0,
-    vulnerableAbsent: 0
+    vulnerableAbsent: 0,
+    unclassified: 0
   };
+}
+
+function splitIntegerAmount(amount, quantities) {
+  const keys = ['vulnerable', 'regular', 'vulnerableAbsent', 'regularAbsent', 'unclassified'];
+  const normalized = Object.fromEntries(keys.map(key => [key, Math.max(0, Math.floor(number(quantities[key])))]));
+  const totalQuantity = keys.reduce((sum, key) => sum + normalized[key], 0);
+  const total = Math.max(0, Math.round(number(amount)));
+  if (!totalQuantity) return { vulnerable: 0, regular: 0, vulnerableAbsent: 0, regularAbsent: 0, unclassified: total };
+  const base = Math.floor(total / totalQuantity);
+  let remainder = total - base * totalQuantity;
+  const result = {};
+  for (const key of keys) {
+    const extra = Math.min(normalized[key], remainder);
+    result[key] = base * normalized[key] + extra;
+    remainder -= extra;
+  }
+  return result;
 }
 
 export function calculateExpense(expense, project, settlement = false) {
   const c = projectCounts(project);
   const studentQty = quantityFor(expense, project);
-  const cohorts = cohortQuantities(expense, project);
+  const cohorts = expenseCohortQuantities(expense, project);
   let unit = 0;
   let studentTotal = 0;
   let staffTotal = 0;
   let total = 0;
 
   if (expense.calcMethod === 'sharedFixed') {
-    const contract = number(settlement && expense.actualAmount !== null && expense.actualAmount !== '' ? expense.actualAmount : expense.planAmount);
+    const contract = Math.max(0, Math.round(number(settlement && expense.actualAmount !== null && expense.actualAmount !== '' ? expense.actualAmount : expense.planAmount)));
     const denominator = studentQty + c.chaperones;
-    unit = denominator > 0 ? roundShared(contract / denominator, expense.rounding ?? 'floor10') : 0;
-    studentTotal = unit * studentQty;
-    staffTotal = contract - studentTotal;
+    if (c.chaperones === 0 && studentQty > 0) {
+      studentTotal = contract;
+      unit = contract / studentQty;
+      staffTotal = 0;
+    } else if (studentQty === 0) {
+      unit = 0;
+      // With no attendees or guides there is no real person group to charge.
+      // Preserve the contracted amount as an unclassified student-side cost
+      // instead of silently dropping it or inventing a staff allocation.
+      studentTotal = c.chaperones > 0 ? 0 : contract;
+      staffTotal = c.chaperones > 0 ? contract : 0;
+    } else {
+      unit = denominator > 0 ? Math.min(
+        roundShared(contract / denominator, expense.rounding ?? 'floor10'),
+        Math.floor(contract / studentQty)
+      ) : 0;
+      studentTotal = unit * studentQty;
+      staffTotal = c.chaperones > 0 ? contract - studentTotal : 0;
+    }
     total = contract;
   } else if (expense.calcMethod === 'fixedStudent') {
-    studentTotal = number(settlement && expense.actualAmount !== null && expense.actualAmount !== '' ? expense.actualAmount : expense.planAmount);
+    studentTotal = Math.max(0, Math.round(number(settlement && expense.actualAmount !== null && expense.actualAmount !== '' ? expense.actualAmount : expense.planAmount)));
     total = studentTotal;
     unit = studentQty > 0 ? studentTotal / studentQty : 0;
   } else {
-    unit = number(expense.unitAmount);
+    unit = Math.max(0, number(expense.unitAmount));
     studentTotal = settlement && expense.actualAmount !== null && expense.actualAmount !== ''
-      ? number(expense.actualAmount)
-      : unit * studentQty;
+      ? Math.max(0, Math.round(number(expense.actualAmount)))
+      : Math.max(0, Math.round(unit * studentQty));
     total = studentTotal;
     if (settlement && expense.actualAmount !== null && expense.actualAmount !== '' && studentQty > 0) unit = studentTotal / studentQty;
   }
 
-  const cohortTotalQty = Object.values(cohorts).reduce((a, b) => a + b, 0);
-  const cohortUnit = cohortTotalQty > 0 ? studentTotal / cohortTotalQty : 0;
-  const cohortCosts = {
-    regular: cohorts.regular * cohortUnit,
-    vulnerable: cohorts.vulnerable * cohortUnit,
-    regularAbsent: cohorts.regularAbsent * cohortUnit,
-    vulnerableAbsent: cohorts.vulnerableAbsent * cohortUnit
-  };
+  const cohortCosts = splitIntegerAmount(studentTotal, cohorts);
 
   return { ...expense, studentQty, unit, studentTotal, staffTotal, total, cohortCosts };
 }
@@ -134,7 +175,9 @@ export function calculateStaffExpense(expense, project, settlement = false) {
     return { total: Math.max(0, number(expense.planAmount)) };
   }
 
-  return { total: Math.max(0, number(expense.unitAmount)) * chaperones };
+  const paidStaffCount = expense.paidStaffCount === null || expense.paidStaffCount === undefined
+    ? chaperones : Math.min(chaperones, Math.max(0, Math.floor(number(expense.paidStaffCount))));
+  return { total: Math.max(0, Math.round(number(expense.unitAmount) * paidStaffCount)), paidStaffCount };
 }
 
 export function calculateExpenses(project, settlement = false) {

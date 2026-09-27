@@ -1,4 +1,5 @@
 import { TRIP_SCHEDULE_FILE_ACCEPT } from '../../services/scheduleUpload.js';
+import { createTripScheduleItem } from '../../presets.js';
 import { escapeHtml } from '../../utils.js';
 
 function scheduleRowHtml(item) {
@@ -15,7 +16,7 @@ function scheduleRowHtml(item) {
 
 function scheduleRowsHtml(items) {
   if (!items.length) {
-    return '<tr data-trip-schedule-empty><td colspan="6" class="center">일정 파일을 업로드하면 자동 입력된 계획이 여기에 표시됩니다.</td></tr>';
+    return '<tr data-trip-schedule-empty><td colspan="6" class="center">일정 파일을 참고하거나 일정 항목 추가를 눌러 직접 입력하세요.</td></tr>';
   }
   return items.map(scheduleRowHtml).join('');
 }
@@ -27,13 +28,14 @@ export function renderTripScheduleSection(project) {
   return `
     <fieldset class="section-fieldset trip-schedule-section" data-project-section="business" data-trip-schedule-section>
       <legend>체험학습 일정 입력</legend>
-      <p class="section-note">체험학습의 전체 일정을 업로드해 주세요. 자동으로 계획을 입력합니다</p>
+      <p class="section-note">파일은 참고자료로 선택할 수 있습니다. 이 화면은 PDF/JPG 내용을 자동 판독하지 않으므로 일정은 직접 입력해 주세요.</p>
       <div class="toolbar">
         <input type="file" accept="${TRIP_SCHEDULE_FILE_ACCEPT}" multiple data-trip-schedule-upload>
         <span class="help" data-trip-schedule-upload-status>PDF 또는 JPG 파일을 선택할 수 있습니다.</span>
         <span class="spacer"></span>
+        <button type="button" data-action="add-schedule-item">일정 항목 추가</button>
         <button type="button" data-action="edit-trip-schedule" ${hasItems ? '' : 'disabled'}>수정</button>
-        <button type="button" data-action="save-trip-schedule" ${hasItems ? '' : 'disabled'}>저장</button>
+        <button type="button" data-action="save-trip-schedule" disabled>저장</button>
       </div>
       <div class="table-wrap">
         <table class="trip-schedule-table">
@@ -54,10 +56,16 @@ export function setTripScheduleEditing(section, editing) {
   });
 
   const editButton = section.querySelector('[data-action="edit-trip-schedule"]');
+  const saveButton = section.querySelector('[data-action="save-trip-schedule"]');
   if (editButton) {
     editButton.disabled = editing;
     editButton.textContent = editing ? '수정 중' : '수정';
   }
+  if (saveButton) saveButton.disabled = !editing;
+}
+
+export function newTripScheduleRowHtml() {
+  return scheduleRowHtml(createTripScheduleItem());
 }
 
 export function readTripScheduleSection(section, previousSchedule = { items: [] }) {
@@ -103,5 +111,5 @@ export function updateTripScheduleUploadStatus(input, validation) {
   }
 
   const names = validation.accepted.map(file => file.name).join(', ');
-  status.textContent = `선택됨: ${names} · 일정 자동 읽기는 AI 연동 단계에서 연결됩니다.`;
+  status.textContent = `참고파일 선택: ${names} · 파일 내용은 자동 입력되지 않습니다.`;
 }

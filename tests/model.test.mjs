@@ -57,7 +57,7 @@ test('기존 비용 데이터는 학생용으로 유지하고 인솔자용 배�
     }]
   });
 
-  assert.equal(state.schemaVersion, 4);
+  assert.equal(state.schemaVersion, 5);
   assert.equal(state.projects[0].expenses.length, 1);
   assert.equal(state.projects[0].expenses[0].id, 'student-expense');
   assert.deepEqual(state.projects[0].staffExpenses, []);
@@ -83,4 +83,29 @@ test('체험처 세부정보와 인솔자용 비용을 정규화한다', () => {
   assert.deepEqual(state.projects[0].staffExpenses[0].details, {
     arrivalTime: '', departureTime: '', address: '', contact: ''
   });
+});
+
+test('제안서 참고값과 재원 반납 정책을 정규화한다', () => {
+  const state = normalizeState({
+    schemaVersion: 5,
+    school: {},
+    projects: [{
+      id: 'reference-project', title: '참고값 보존', expenses: [],
+      workflow: {
+        resources: [
+          { id: 'education', name: '교육청 지원금', reportClass: 'education' },
+          { id: 'school', name: '학교 지원', reportClass: 'school' }
+        ],
+        proposalReference: { documentLabel: '운영위원회 제안서', bodyPerPerson: '346700', tablePerPerson: '337000' }
+      }
+    }]
+  });
+
+  const project = state.projects[0];
+  assert.equal(project.workflow.resources[0].returnRequired, true);
+  assert.equal(project.workflow.resources[1].returnRequired, false);
+  assert.equal(project.workflow.proposalReference.documentLabel, '운영위원회 제안서');
+  assert.equal(project.workflow.proposalReference.bodyPerPerson, 346700);
+  assert.equal(project.workflow.proposalReference.tablePerPerson, 337000);
+  assert.equal(project.workflow.proposalReference.vehicleDenominator, null);
 });
