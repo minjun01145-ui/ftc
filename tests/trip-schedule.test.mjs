@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createExpense, createTripScheduleItem, normalizeState } from '../js/presets.js';
-import { validateScheduleFiles } from '../js/services/scheduleUpload.js';
+import { MAX_SCHEDULE_DOCUMENT_BYTES, validateScheduleFiles } from '../js/services/scheduleUpload.js';
 import { syncExpensesFromTripSchedule } from '../js/tripSchedule.js';
 import { renderTripScheduleSection } from '../js/views/project/tripScheduleSection.js';
 import { renderProjectList } from '../js/views/sidebarView.js';
@@ -69,33 +69,44 @@ test('일정에서 삭제된 연결 행은 제거하지만 수동 행은 제거�
   assert.deepEqual(expenses.map(item => item.id), ['manual']);
 });
 
-test('일정 업로드는 PDF와 JPG만 허용한다', () => {
+test('일정 문서 업로드는 PDF와 HWPX 한 개만 허용하고 HWP/JPG 및 대용량 파일은 거절한다', () => {
   const result = validateScheduleFiles([
-    { name: 'plan.pdf', type: 'application/pdf' },
-    { name: 'capture.JPG', type: 'image/jpeg' },
-    { name: 'capture.png', type: 'image/png' }
+    { name: 'plan.pdf', type: 'application/pdf', size: 100 },
+    { name: 'plan.hwpx', type: 'application/zip', size: 100 }
   ]);
 
-  assert.deepEqual(result.accepted.map(file => file.name), ['plan.pdf', 'capture.JPG']);
-  assert.deepEqual(result.rejected.map(file => file.name), ['capture.png']);
+  assert.deepEqual(result.accepted, []);
+  assert.equal(result.error, 'MULTIPLE_DOCUMENTS');
+
+  const pdf = validateScheduleFiles([{ name: 'plan.pdf', type: 'application/pdf', size: 100 }]);
+  const hwpx = validateScheduleFiles([{ name: 'plan.hwpx', type: 'application/x-hwp', size: 100 }]);
+  const unsupported = validateScheduleFiles([{ name: 'plan.hwp', type: 'application/x-hwp', size: 100 }]);
+  const jpg = validateScheduleFiles([{ name: 'scan.jpg', type: 'image/jpeg', size: 100 }]);
+  const oversized = validateScheduleFiles([{ name: 'large.pdf', type: 'application/pdf', size: MAX_SCHEDULE_DOCUMENT_BYTES + 1 }]);
+
+  assert.deepEqual(pdf.accepted.map(file => file.name), ['plan.pdf']);
+  assert.deepEqual(hwpx.accepted.map(file => file.name), ['plan.hwpx']);
+  assert.equal(unsupported.error, 'UNSUPPORTED_DOCUMENT_TYPE');
+  assert.equal(jpg.error, 'UNSUPPORTED_DOCUMENT_TYPE');
+  assert.equal(oversized.error, 'DOCUMENT_TOO_LARGE');
 });
 
-test('사업정보 일정 화면은 자동 판독 한계와 직접 입력 경로를 제공한다', () => {
+test('사업정보 일정 화면은 PDF/HWPX 가져오기와 직접 편집 경로를 제공한다', () => {
   const html = renderTripScheduleSection({ tripSchedule: { items: [scheduleItem] } });
 
-  assert.match(html, /파일 내용은 자동 입력되지 않습니다\. 일정을 직접 입력하세요\./);
-  assert.match(html, /accept="\.pdf,\.jpg,\.jpeg,application\/pdf,image\/jpeg"/);
+  assert.match(html, /accept="\.pdf,\.hwpx,application\/pdf,application\/haansofthwpx,application\/vnd\.hancom\.hwpx"/);
+  assert.doesNotMatch(html, /multiple|파일 내용은 자동 입력되지 않습니다/);
   assert.match(html, /data-schedule-field="name"[^>]*value="박물관"[^>]*readonly/);
   assert.match(html, /data-action="add-schedule-item"/);
   assert.match(html, /data-action="edit-trip-schedule"/);
   assert.match(html, /data-action="save-trip-schedule"/);
 });
 
-test('사업 상위 항목을 누르면 업무 흐름이 기본 목적지가 된다', () => {
+test('사업 제목을 누르면 사업정보가 기본 목적지가 된다', () => {
   const html = renderProjectList(
     [{ id: 'project-1', title: '수학여행' }],
     { type: 'school', projectId: null, section: null }
   );
 
-  assert.match(html, /class="project-item [^"]*"[\s\S]*data-project-section="workflow"/);
+  assert.match(html, /class="project-item [^"]*"[\s\S]*data-project-section="business"/);
 });

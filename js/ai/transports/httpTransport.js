@@ -4,7 +4,7 @@ function normalizeBaseUrl(value) {
   return String(value ?? '').trim().replace(/\/+$/, '');
 }
 
-export function createHttpAiTransport({ baseUrl, timeoutMs = 45000, fetchImpl = fetch } = {}) {
+export function createHttpAiTransport({ baseUrl, timeoutMs = 45000, documentTimeoutMs = timeoutMs, fetchImpl = fetch } = {}) {
   const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
 
   return Object.freeze({
@@ -27,8 +27,44 @@ export function createHttpAiTransport({ baseUrl, timeoutMs = 45000, fetchImpl = 
         timeoutMs,
         body: { capability, payload }
       });
+    },
+
+    async invokeDocument(capability, file, payload = {}) {
+      if (!normalizedBaseUrl) {
+        throw new AiError('AI gateway URL이 설정되지 않았습니다.', { code: 'AI_GATEWAY_URL_MISSING' });
+      }
+      const form = new FormData();
+      form.append('capability', capability);
+      form.append('payload', JSON.stringify(payload));
+      form.append('file', file, file.name);
+      return requestMultipart(fetchImpl, `${normalizedBaseUrl}/aiDocumentGateway`, form, documentTimeoutMs);
     }
   });
+}
+
+async function requestMultipart(fetchImpl, url, body, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetchImpl(url, { method: 'POST', body, signal: controller.signal });
+    const data = await readJsonSafely(response);
+    if (!response.ok) {
+      throw new AiError(data?.error?.message || `AI 요청 실패 (${response.status})`, {
+        code: data?.error?.code || 'AI_HTTP_ERROR',
+        status: response.status
+      });
+    }
+    return data;
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new AiError('AI 요청 시간이 초과되었습니다.', { code: 'AI_TIMEOUT', cause: error });
+    }
+    if (error instanceof AiError) throw error;
+    throw new AiError('AI 서버에 연결할 수 없습니다.', { code: 'AI_NETWORK_ERROR', cause: error });
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function requestJson(fetchImpl, url, { method, timeoutMs, body } = {}) {

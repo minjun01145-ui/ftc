@@ -21,6 +21,15 @@ export function createAiClient({ enabled = false, transport } = {}) {
         throw new TypeError('capability는 비어 있지 않은 문자열이어야 합니다.');
       }
       return transport.invoke(capability, payload);
+    },
+
+    async invokeDocument(capability, file, payload = {}) {
+      assertConfigured(enabled, transport);
+      if (!capability || typeof capability !== 'string') {
+        throw new TypeError('capability는 비어 있지 않은 문자열이어야 합니다.');
+      }
+      if (typeof transport.invokeDocument !== 'function') throw new AiNotConfiguredError();
+      return transport.invokeDocument(capability, file, payload);
     }
   });
 }

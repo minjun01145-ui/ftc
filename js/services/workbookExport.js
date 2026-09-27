@@ -55,7 +55,12 @@ function schoolForConfirmedPlan(project, school) {
 
 function projectSettlement(project, school) {
   const plan = confirmedProject(project) ?? project;
-  const expected = calculateWorkflow(plan, plan === project ? school : schoolForConfirmedPlan(project, school));
+  const legacySchoolBudget = project.workflow?.confirmedPlan?.schoolBudget?.amount;
+  const expected = calculateWorkflow(
+    plan,
+    plan === project ? school : schoolForConfirmedPlan(project, school),
+    { useLegacySnapshotSchoolBudget: plan !== project && legacySchoolBudget != null }
+  );
   const actual = calculateWorkflow(project, school, { basis: 'actual' });
   const sourceRows = actual.resourceTotals;
   const educationIssued = sumKnown(sourceRows, row => row.reportClass === 'education', 'issuedAmount');

@@ -10,7 +10,8 @@ export function createDefaultAiClient() {
   const transport = aiConfig.gatewayUrl
     ? createHttpAiTransport({
         baseUrl: aiConfig.gatewayUrl,
-        timeoutMs: aiConfig.requestTimeoutMs
+        timeoutMs: aiConfig.requestTimeoutMs,
+        documentTimeoutMs: aiConfig.documentTimeoutMs
       })
     : null;
 

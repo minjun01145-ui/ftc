@@ -1,4 +1,4 @@
-import { escapeHtml, formatWon, number } from '../utils.js';
+import { escapeHtml, number } from '../utils.js';
 
 const EDUCATION_OFFICES = [
   ['seobu', '서부교육지원청'],
@@ -8,20 +8,11 @@ const EDUCATION_OFFICES = [
   ['haeundae', '해운대교육지원청']
 ];
 
-export function renderSchoolPage(school, projects = []) {
+export function renderSchoolPage(school) {
   const total = number(school.grade1Students) + number(school.grade2Students) + number(school.grade3Students);
   const officeOptions = EDUCATION_OFFICES.map(([value, label]) => `
     <option value="${value}" ${school.educationOffice === value ? 'selected' : ''}>${label}</option>
   `).join('');
-  const budgetRows = projects.map(project => {
-    const allocation = school.projectBudgets?.[project.id] ?? {};
-    const grade = project.grade ? `${project.grade}학년` : '학년 미지정';
-    return `<tr data-school-budget-row data-project-id="${escapeHtml(project.id)}">
-      <td>${escapeHtml(project.title)}<small>${grade}</small></td>
-      <td><input type="number" min="0" step="1" name="budgetAmount:${escapeHtml(project.id)}" value="${allocation.amount == null ? '' : number(allocation.amount)}" placeholder="배정 전"></td>
-      <td class="center"><input type="checkbox" name="budgetFixed:${escapeHtml(project.id)}" ${allocation.fixed ? 'checked' : ''} aria-label="${escapeHtml(project.title)} 배정 고정"></td>
-    </tr>`;
-  }).join('');
   return `
     <h1>기본정보</h1>
     <form id="schoolForm">
@@ -44,13 +35,6 @@ export function renderSchoolPage(school, projects = []) {
         <div id="schoolSearchResults" class="school-search-results" role="listbox" aria-label="학교 검색 결과"></div>
       </fieldset>
       <fieldset>
-        <legend>사업별 학교 지원 배정</legend>
-        <div class="table-wrap"><table class="school-budget-table"><thead><tr><th>사업/학년</th><th>배정액</th><th>고정</th></tr></thead>
-          <tbody>${budgetRows || '<tr><td colspan="3" class="center">사업이 없습니다.</td></tr>'}</tbody>
-        </table></div>
-      </fieldset>
-
-      <fieldset>
         <legend>학교 정보</legend>
         <div class="form-grid">
           <label for="schoolName">학교명</label>
@@ -72,10 +56,7 @@ export function renderSchoolPage(school, projects = []) {
           <label>전체 학생수</label>
           <input id="schoolTotalStudents" readonly value="${total}">
         </div>
-        <div class="school-info-lookup">
-          <button type="button" data-action="lookup-school-students">학교알리미 학생수 조회</button>
-          <span id="schoolInfoStatus" class="help" role="status" aria-live="polite"></span>
-        </div>
+        <p>*학생수는 학교알리미에서 자동으로 불러오므로, 실제 학생수와 비교하여 수정한 후 저장해 주십시오.</p>
         <input type="hidden" name="schoolCode" value="${escapeHtml(school.schoolCode)}">
         <input type="hidden" name="schoolRegionCode" value="${escapeHtml(school.schoolRegionCode)}">
         <input type="hidden" name="schoolKindCode" value="${escapeHtml(school.schoolKindCode)}">
@@ -85,17 +66,8 @@ export function renderSchoolPage(school, projects = []) {
   `;
 }
 
-export function readSchoolForm(form, previous, projects = []) {
+export function readSchoolForm(form, previous) {
   const data = new FormData(form);
-  const projectBudgets = { ...(previous.projectBudgets ?? {}) };
-  for (const project of projects) {
-    const amountText = data.get(`budgetAmount:${project.id}`);
-    projectBudgets[project.id] = {
-      ...(projectBudgets[project.id] ?? {}),
-      amount: amountText === null || amountText === '' ? null : Math.max(0, number(amountText)),
-      fixed: data.get(`budgetFixed:${project.id}`) === 'on'
-    };
-  }
   return {
     ...previous,
     name: String(data.get('name') ?? '').trim(),
@@ -107,7 +79,6 @@ export function readSchoolForm(form, previous, projects = []) {
     schoolYear: Math.max(0, number(data.get('schoolYear'))),
     grade1Students: Math.max(0, number(data.get('grade1Students'))),
     grade2Students: Math.max(0, number(data.get('grade2Students'))),
-    grade3Students: Math.max(0, number(data.get('grade3Students'))),
-    projectBudgets
+    grade3Students: Math.max(0, number(data.get('grade3Students')))
   };
 }

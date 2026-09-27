@@ -375,13 +375,16 @@ function renderPrintSummary(project, school, plan, actual) {
   const adminRows = reconciliation.rows.map(row => `<tr><td>${escapeHtml(row.name || row.expenseId)}</td><td>${money(row.planned)}</td><td>${row.committed == null ? '미대조' : money(row.committed)}</td><td>${row.netPayments == null ? '미대조' : money(row.netPayments)}</td><td>${row.actual == null ? '미입력' : money(row.actual)}</td><td>${row.status}</td></tr>`).join('');
   const returnRows = reconciliation.returnRows.map(row => `<tr><td>${escapeHtml(row.name)}</td><td>${row.expectedReturn == null ? '교부액 미입력' : money(row.expectedReturn)}</td><td>${row.returned == null ? '미입력' : money(row.returned)}</td><td>${row.difference == null ? '—' : `${row.difference > 0 ? '+' : ''}${money(row.difference)}`}</td><td>${row.status}</td></tr>`).join('');
   const validationIssues = [...plan.issues, ...actual.issues];
-  const schoolBudget = school.projectBudgets?.[project.id];
+  const hasSchoolResourceBudget = plan.resourceTotals.some(row => row.reportClass === 'school' && row.issuedAmount != null);
+  const schoolResourceBudget = plan.resourceTotals
+    .filter(row => row.reportClass === 'school' && row.issuedAmount != null)
+    .reduce((sum, row) => sum + money(row.issuedAmount), 0);
   return `<div class="workflow-print-only">
     <h1>${escapeHtml(school.name || '학교')} ${number(school.schoolYear)}학년도 현장체험학습 검토자료</h1>
     <table class="print-meta"><tbody>
       <tr><th>사업/학년</th><td>${escapeHtml(project.title)} · ${project.grade ? `${project.grade}학년` : '학년 미지정'}</td><th>방식/기간</th><td>${escapeHtml(project.executionMode)} · ${escapeHtml(project.startDate)} ~ ${escapeHtml(project.endDate)} (${number(project.days)}일)</td></tr>
       <tr><th>장소</th><td>${escapeHtml(project.place || '-')}</td><th>참여 인원</th><td>계획 ${planCount.participants}명 (취약 ${planCount.vulnerableParticipants}, 비취약 ${planCount.regularParticipants}) · 실적 ${actualAttendance}</td></tr>
-      <tr><th>학교 예산</th><td>사업 배정 ${schoolBudget?.amount == null ? '미배정' : money(schoolBudget.amount)}원 ${schoolBudget?.fixed ? '(고정)' : ''}</td><th>사업 계획</th><td>${project.workflow?.confirmedPlan ? `${project.workflow.confirmedPlan.revision ?? 1}차 확정본 · ${escapeHtml(project.workflow.confirmedPlan.confirmedAt?.slice(0, 10) ?? '')}` : '잠정 계획'}</td></tr>
+      <tr><th>학교 재원</th><td>${hasSchoolResourceBudget ? `${schoolResourceBudget}원` : '재원별 배정 확인'}</td><th>사업 계획</th><td>${project.workflow?.confirmedPlan ? `${project.workflow.confirmedPlan.revision ?? 1}차 확정본 · ${escapeHtml(project.workflow.confirmedPlan.confirmedAt?.slice(0, 10) ?? '')}` : '잠정 계획'}</td></tr>
     </tbody></table>
     <h2>비용 산출 · 취소/환불</h2><table><thead><tr><th>구분</th><th>항목</th><th>계획액</th><th>실제 총액</th><th>환불</th></tr></thead><tbody>${costRows || '<tr><td colspan="5">입력된 비용 없음</td></tr>'}</tbody></table>
     <h2>운영위원회 제안서 참고값</h2>${proposalReferenceComparison(project, plan)}

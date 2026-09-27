@@ -3,7 +3,10 @@ import { createProject } from './presets.js';
 import { buildProposalLines, calculateWorkflow, createConfirmedPlanSnapshot, summarizeAttendance } from './workflowEngine.js';
 import { downloadWorkflowWorkbook } from './services/workbookExport.js';
 import { getSchoolStudentCounts, searchSchools } from './services/schoolInfo.js';
-import { validateScheduleFiles } from './services/scheduleUpload.js';
+import { createSchoolStudentLookup } from './services/schoolStudentLookup.js';
+import { scheduleUploadErrorMessage, validateScheduleFiles } from './services/scheduleUpload.js';
+import { createScheduleDocumentImportService } from './services/scheduleDocumentImport.js';
+import { createDefaultAiClient } from './ai/createDefaultAiClient.js';
 import { getState, persistState, replaceState, updateState } from './state.js';
 import { syncExpensesFromTripSchedule } from './tripSchedule.js';
 import { downloadJson, escapeHtml, number } from './utils.js';
@@ -22,7 +25,13 @@ import {
 } from './views/expenseTable.js';
 import { readProjectForm, renderProjectPage } from './views/projectView.js';
 import { newAdminRowHtml, newManualRowHtml, newSourceRowHtml, readWorkflowForm } from './views/project/workflowSection.js';
-import { newTripScheduleRowHtml, readTripScheduleSection, setTripScheduleEditing, updateTripScheduleUploadStatus } from './views/project/tripScheduleSection.js';
+import {
+  newTripScheduleRowHtml,
+  readTripScheduleSection,
+  replaceTripScheduleDraft,
+  setTripScheduleEditing,
+  setTripScheduleUploadStatus
+} from './views/project/tripScheduleSection.js';
 import { renderProjectList } from './views/sidebarView.js';
 import { readSchoolForm, renderSchoolPage } from './views/schoolView.js';
 
@@ -38,8 +47,11 @@ let currentPage = { type: 'school', projectId: null, section: null };
 let dirty = false;
 let messageTimer;
 let schoolSearchRequestId = 0;
+let scheduleDocumentRequestId = 0;
+const scheduleDocumentImport = createScheduleDocumentImportService({ aiClient: createDefaultAiClient() });
+const schoolStudentLookup = createSchoolStudentLookup(getSchoolStudentCounts);
 
-function projectPage(projectId, section = PROJECT_SECTION.WORKFLOW) {
+function projectPage(projectId, section = PROJECT_SECTION.BUSINESS) {
   return { type: 'project', projectId, section: normalizeProjectSection(section) };
 }
 
@@ -61,7 +73,7 @@ function render() {
   const state = getState();
 
   if (currentPage.type === 'school') {
-    main.innerHTML = renderSchoolPage(state.school, state.projects);
+    main.innerHTML = renderSchoolPage(state.school);
     dirty = false;
     return;
   }
@@ -86,7 +98,7 @@ function canDiscardChanges() {
 
 function saveSchool(form) {
   const state = getState();
-  const school = readSchoolForm(form, state.school, state.projects);
+  const school = readSchoolForm(form, state.school);
   updateState(next => { next.school = school; });
   persistState();
   render();
@@ -107,6 +119,11 @@ function clearSelectedSchool(form) {
     const field = form.querySelector(`[name="${name}"]`);
     if (field) field.value = '';
   }
+}
+
+function setSchoolStatus(form, text) {
+  const status = form?.querySelector('#schoolSearchStatus');
+  if (status) status.textContent = text;
 }
 
 function renderSchoolSearchResults(schools) {
@@ -166,8 +183,6 @@ function normalizeHomepage(value) {
 }
 
 async function lookupSchoolStudents(form) {
-  const status = form.querySelector('#schoolInfoStatus');
-  const button = form.querySelector('[data-action="lookup-school-students"]');
   const educationOffice = form.querySelector('[name="educationOffice"]').value;
   const schoolCode = form.querySelector('[name="schoolCode"]').value;
   const schoolRegionCode = form.querySelector('[name="schoolRegionCode"]').value;
@@ -187,37 +202,32 @@ async function lookupSchoolStudents(form) {
     && countFields.every((field, index) => field.value === countsAtRequest[index]);
 
   if (!educationOffice || !schoolCode || !schoolRegionCode) {
-    status.textContent = '학교 검색 결과에서 학교를 선택한 뒤 조회해 주세요.';
+    setSchoolStatus(form, '학교 검색 결과에서 학교를 선택해 주세요.');
     return;
   }
   if (!reportYear) {
-    status.textContent = '학년도를 입력한 뒤 조회해 주세요.';
+    setSchoolStatus(form, '학년도를 입력한 뒤 학교를 선택해 주세요.');
     return;
   }
 
-  button.disabled = true;
-  status.textContent = `${reportYear}년 공시 학생수를 조회하고 있습니다.`;
+  setSchoolStatus(form, `${reportYear}년 공시 학생수를 조회하고 있습니다.`);
   try {
-    const result = await getSchoolStudentCounts({
-      educationOffice,
-      schoolCode,
-      schoolRegionCode,
-      reportYear
+    const outcome = await schoolStudentLookup.lookup({
+      educationOffice, schoolCode, schoolRegionCode, reportYear
+    }, {
+      isCurrent: requestIsCurrent,
+      apply(result) {
+        form.querySelector('[name="grade1Students"]').value = String(result.counts.grade1Students);
+        form.querySelector('[name="grade2Students"]').value = String(result.counts.grade2Students);
+        form.querySelector('[name="grade3Students"]').value = String(result.counts.grade3Students);
+        updateSchoolTotal(form);
+        dirty = true;
+      }
     });
-    if (!requestIsCurrent()) return;
-
-    const counts = result.counts;
-    form.querySelector('[name="grade1Students"]').value = String(counts.grade1Students);
-    form.querySelector('[name="grade2Students"]').value = String(counts.grade2Students);
-    form.querySelector('[name="grade3Students"]').value = String(counts.grade3Students);
-    updateSchoolTotal(form);
-    dirty = true;
-    status.textContent = `${result.reportYear}년 학교알리미 공시값을 불러왔습니다. 실제 인원과 비교해 수정한 뒤 저장해 주세요.`;
+    if (!outcome.applied) return;
+    setSchoolStatus(form, `${outcome.result.reportYear}년 학교알리미 공시값을 불러왔습니다. 학생수를 확인하고 수정한 뒤 저장해 주세요.`);
   } catch (error) {
-    if (!requestIsCurrent()) return;
-    status.textContent = error.message;
-  } finally {
-    button.disabled = false;
+    setSchoolStatus(form, error.message);
   }
 }
 
@@ -317,6 +327,56 @@ function saveTripSchedule(form) {
   showMessage('체험학습 일정을 저장하고 체험처/비용에 반영했습니다.');
 }
 
+async function importTripScheduleDocument(input) {
+  const section = input.closest('[data-trip-schedule-section]');
+  const form = input.form;
+  const requestId = ++scheduleDocumentRequestId;
+  const validation = validateScheduleFiles(input.files);
+  if (validation.error) {
+    setTripScheduleUploadStatus(input, scheduleUploadErrorMessage(validation.error), { error: true });
+    input.value = '';
+    return;
+  }
+
+  const [file] = validation.accepted;
+  const project = getState().projects.find(item => item.id === currentPage.projectId);
+  if (!project || !section || !form) {
+    input.value = '';
+    return;
+  }
+
+  input.disabled = true;
+  setTripScheduleUploadStatus(input, '분석 중...');
+  try {
+    const items = await scheduleDocumentImport.importFile(file, {
+      projectTitle: project.title,
+      schoolYear: getState().school.schoolYear,
+      startDate: project.startDate,
+      endDate: project.endDate
+    });
+    if (!main.contains(form) || requestId !== scheduleDocumentRequestId) return;
+    if (!items.length) {
+      setTripScheduleUploadStatus(input, '일정 항목을 찾지 못했습니다. 기존 일정은 그대로입니다.');
+      return;
+    }
+    if (!replaceTripScheduleDraft(section, items)) {
+      setTripScheduleUploadStatus(input, '일정 초안을 만들지 못했습니다. 기존 일정은 그대로입니다.', { error: true });
+      return;
+    }
+    dirty = true;
+    setTripScheduleUploadStatus(input, `${items.length}개 일정을 초안으로 가져왔습니다. 확인한 뒤 저장해 주세요.`);
+  } catch (error) {
+    if (!main.contains(form) || requestId !== scheduleDocumentRequestId) return;
+    const messageText = ['AI_NOT_CONFIGURED', 'AI_MODEL_NOT_CONFIGURED'].includes(error.code)
+      ? '문서 일정 가져오기가 설정되지 않았습니다.'
+      : error.message || '문서에서 일정을 읽지 못했습니다.';
+    setTripScheduleUploadStatus(input, messageText, { error: true });
+  } finally {
+    input.value = '';
+    input.disabled = false;
+  }
+}
+
 function goTo(page) {
   if (!canDiscardChanges()) return;
   currentPage = page;
@@ -382,12 +442,19 @@ main.addEventListener('input', event => {
 
   dirty = true;
   if (target.form?.id === 'schoolForm' && target.name === 'name') {
+    schoolStudentLookup.invalidate();
     clearSelectedSchool(target.form);
-    target.form.querySelector('#schoolInfoStatus').textContent = '학교명을 수정했습니다. 학교알리미 조회를 하려면 다시 검색해 학교를 선택해 주세요.';
+    setSchoolStatus(target.form, '학교명을 수정했습니다. 학생수를 자동 조회하려면 학교를 다시 검색해 선택해 주세요.');
   }
   if (target.form?.id === 'schoolForm'
       && ['grade1Students', 'grade2Students', 'grade3Students'].includes(target.name)) {
+    schoolStudentLookup.invalidate();
     updateSchoolTotal(target.form);
+    setSchoolStatus(target.form, '학생수를 확인하고 실제 인원에 맞게 수정한 뒤 저장해 주세요.');
+  }
+  if (target.form?.id === 'schoolForm' && target.name === 'schoolYear') {
+    schoolStudentLookup.invalidate();
+    setSchoolStatus(target.form, '학년도를 바꿨습니다. 학교를 다시 선택하면 학생수를 조회합니다.');
   }
   if (target.dataset.detailField !== undefined) {
     const editor = target.closest('[data-expense-detail-editor]');
@@ -407,7 +474,7 @@ main.addEventListener('change', event => {
   const target = event.target;
 
   if (target.matches('[data-trip-schedule-upload]')) {
-    updateTripScheduleUploadStatus(target, validateScheduleFiles(target.files));
+    void importTripScheduleDocument(target);
     return;
   }
   if (target.matches('[data-school-search]')) return;
@@ -416,13 +483,14 @@ main.addEventListener('change', event => {
 
   if (target.id === 'educationOffice') {
     schoolSearchRequestId += 1;
+    schoolStudentLookup.invalidate();
     target.form.querySelector('[data-action="search-schools"]').disabled = false;
     clearSelectedSchool(target.form);
     target.form.querySelector('#schoolSearchResults').innerHTML = '';
     target.form.querySelector('#schoolSearchStatus').textContent = target.value
       ? '학교명을 검색하거나 비워 두고 학교 검색을 눌러 목록을 확인하세요.'
       : '교육지원청을 선택한 뒤 학교를 검색하세요.';
-    target.form.querySelector('#schoolInfoStatus').textContent = '학교 검색 결과에서 학교를 선택하면 학생수를 자동 조회합니다.';
+    setSchoolStatus(target.form, '학교명을 검색해 학교를 선택하면 학생수를 자동 조회합니다.');
     return;
   }
 
@@ -465,6 +533,7 @@ main.addEventListener('click', event => {
 
   if (action === 'select-school' && form?.id === 'schoolForm') {
     schoolSearchRequestId += 1;
+    schoolStudentLookup.invalidate();
     form.querySelector('[data-action="search-schools"]').disabled = false;
     form.querySelector('[name="educationOffice"]').value = button.dataset.schoolOffice ?? '';
     form.querySelector('[name="name"]').value = button.dataset.schoolName ?? '';
@@ -474,13 +543,8 @@ main.addEventListener('click', event => {
     form.querySelector('[name="schoolKindCode"]').value = button.dataset.schoolKindCode ?? '';
     form.querySelector('#schoolSearchResults').innerHTML = '';
     form.querySelector('#schoolSearchStatus').textContent = `${button.dataset.schoolName ?? '학교'}를 선택했습니다.`;
-    form.querySelector('#schoolInfoStatus').textContent = '학교알리미 공시 학생수를 조회하고 있습니다.';
+    setSchoolStatus(form, '학교를 선택했습니다. 학생수를 조회하고 있습니다.');
     dirty = true;
-    void lookupSchoolStudents(form);
-    return;
-  }
-
-  if (action === 'lookup-school-students' && form?.id === 'schoolForm') {
     void lookupSchoolStudents(form);
     return;
   }

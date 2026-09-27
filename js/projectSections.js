@@ -10,7 +10,6 @@ export const PROJECT_SECTION = Object.freeze({
 });
 
 export const PROJECT_SECTION_ITEMS = Object.freeze([
-  { key: PROJECT_SECTION.WORKFLOW, label: '업무 흐름' },
   { key: PROJECT_SECTION.OVERVIEW, label: '전체보기' },
   { key: PROJECT_SECTION.BUSINESS, label: '사업정보' },
   { key: PROJECT_SECTION.HEADCOUNT, label: '인원' },
@@ -23,7 +22,8 @@ export const PROJECT_SECTION_ITEMS = Object.freeze([
 const validSections = new Set(PROJECT_SECTION_ITEMS.map(item => item.key));
 
 export function normalizeProjectSection(value) {
-  return validSections.has(value) ? value : PROJECT_SECTION.OVERVIEW;
+  if (value === PROJECT_SECTION.WORKFLOW) return PROJECT_SECTION.BUSINESS;
+  return validSections.has(value) ? value : PROJECT_SECTION.BUSINESS;
 }
 
 export function projectSectionLabel(value) {

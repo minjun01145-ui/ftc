@@ -4,14 +4,14 @@ import { executeCapability } from '../src/ai/gateway.js';
 import { listCapabilities } from '../src/ai/capabilities/registry.js';
 
 
-test('기반 버전에는 실제 AI capability가 등록되어 있지 않다', () => {
-  assert.deepEqual(listCapabilities(), []);
+test('문서 일정 capability만 registry에 등록한다', () => {
+  assert.deepEqual(listCapabilities(), ['trip-schedule-from-document']);
 });
 
 
 test('등록되지 않은 capability는 provider를 호출하지 않고 404를 반환한다', async () => {
   const result = await executeCapability({
-    capabilityId: 'budget-review',
+    capabilityId: 'not-registered',
     payload: {},
     runtimeConfig: { provider: 'ollama', defaultModel: '' },
     providerSecrets: {}

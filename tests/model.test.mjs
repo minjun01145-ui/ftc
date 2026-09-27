@@ -20,6 +20,12 @@ test('불러온 데이터의 기존 ID를 유지하고 누락 필드를 기본�
   assert.equal(state.projects[0].educationSupport.vulnerableMode, 'full');
 });
 
+test('학교 projectBudgets legacy 값은 가져오기에서 삭제하지 않고 보존한다', () => {
+  const projectBudgets = { 'legacy-project': { amount: 350000, fixed: true, targetBurden: 90000 } };
+  const state = normalizeState({ school: { projectBudgets }, projects: [] });
+  assert.deepEqual(state.school.projectBudgets, projectBudgets);
+});
+
 test('기존 취약계층 참가/불참 데이터에서 취약계층 전체 학생수를 보완한다', () => {
   const state = normalizeState({
     school: {},

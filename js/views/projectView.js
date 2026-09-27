@@ -8,7 +8,6 @@ import { renderHeadcountSection } from './project/headcountSection.js';
 import { renderReportSection } from './project/reportSection.js';
 import { renderSettlementSection } from './project/settlementSection.js';
 import { renderTripScheduleSection } from './project/tripScheduleSection.js';
-import { renderWorkflowSection } from './project/workflowSection.js';
 import { createFundingSource } from '../presets.js';
 import { summarizeAttendance } from '../workflowEngine.js';
 
@@ -32,8 +31,6 @@ function renderOverview(project, school) {
 
 function renderSection(project, school, section) {
   switch (section) {
-    case PROJECT_SECTION.WORKFLOW:
-      return renderWorkflowSection(project, school);
     case PROJECT_SECTION.BUSINESS:
       return renderBusinessSections(project, school);
     case PROJECT_SECTION.HEADCOUNT:
@@ -52,7 +49,7 @@ function renderSection(project, school, section) {
   }
 }
 
-export function renderProjectPage(project, school, requestedSection = PROJECT_SECTION.WORKFLOW) {
+export function renderProjectPage(project, school, requestedSection = PROJECT_SECTION.BUSINESS) {
   const section = normalizeProjectSection(requestedSection);
   return `
     <h1>${escapeHtml(project.title)}</h1>

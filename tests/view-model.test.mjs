@@ -18,20 +18,13 @@ test('전체보기는 인원 다음 학생용, 인솔자용, 예산 순서로 �
   assert.ok(staff < budget);
 });
 
-test('사업 화면의 기본 진입은 현장체험학습 업무 흐름이다', () => {
+test('사업 화면의 기본 진입은 사업정보다', () => {
   const html = renderProjectPage(sampleProject(), { name: '테스트중학교' });
-  assert.match(html, /data-project-view="workflow"/);
-  assert.match(html, /현장체험학습 업무 흐름/);
+  assert.match(html, /data-project-view="business"/);
+  assert.match(html, /<legend>사업정보<\/legend>/);
 });
 
-test('업무 흐름 화면은 문서 참고값, 반납 대조, 공식 XLSX와 인쇄 경로를 연결한다', () => {
-  const html = renderProjectPage(sampleProject(), { name: '익명 학교', schoolYear: 2026 });
-  assert.match(html, /운영위원회 제안서 참고값/);
-  assert.match(html, /문서 기재값과 현재 계산 비교/);
-  assert.match(html, /지원금 잔액과 실제 반납 대조/);
-  assert.match(html, /data-action="export-workbook"/);
-  assert.match(html, /data-action="print-workflow"/);
-  assert.match(html, /workflow-print-only/);
+test('기존 workflow 행 편집 helper와 재원 모델은 과거 자료 호환을 위해 유지한다', () => {
   assert.match(newSourceRowHtml(), /data-resource-field="returnRequired"/);
   assert.match(newSourceRowHtml(), /<option value="student"[^>]*>학생 부담<\/option>/);
 });

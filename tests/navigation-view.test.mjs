@@ -7,11 +7,12 @@ import { renderProjectList } from '../js/views/sidebarView.js';
 
 const school = { name: '테스트중학교' };
 
-test('사업 하위메뉴는 업무 흐름과 기존 7개 화면을 제공한다', () => {
+test('사업 하위메뉴에는 업무 흐름이 없고 기존 일반 화면을 제공한다', () => {
   assert.deepEqual(PROJECT_SECTION_ITEMS.map(item => item.label), [
-    '업무 흐름', '전체보기', '사업정보', '인원', '체험처/비용', '예산 관리', '리포트 보기', '정산'
+    '전체보기', '사업정보', '인원', '체험처/비용', '예산 관리', '리포트 보기', '정산'
   ]);
-  assert.equal(normalizeProjectSection('없는메뉴'), PROJECT_SECTION.OVERVIEW);
+  assert.equal(normalizeProjectSection('workflow'), PROJECT_SECTION.BUSINESS);
+  assert.equal(normalizeProjectSection('없는메뉴'), PROJECT_SECTION.BUSINESS);
 });
 
 test('선택된 사업 아래에만 하위메뉴가 렌더링된다', () => {
@@ -22,6 +23,7 @@ test('선택된 사업 아래에만 하위메뉴가 렌더링된다', () => {
   assert.equal((html.match(/class="project-submenu"/g) ?? []).length, 1);
   assert.match(html, /data-project-section="budget"[^>]*>예산 관리<\/button>/);
   assert.match(html, /project-subitem active[^>]*data-project-section="budget"/);
+  assert.doesNotMatch(html, /data-project-section="workflow"/);
 });
 
 test('사업정보 화면은 사업정보만 보여주고 다른 편집 섹션은 렌더링하지 않는다', () => {
@@ -30,6 +32,15 @@ test('사업정보 화면은 사업정보만 보여주고 다른 편집 섹션�
   assert.doesNotMatch(html, /<legend>인원<\/legend>/);
   assert.doesNotMatch(html, /체험처\/비용\(학생용\)/);
   assert.doesNotMatch(html, /<legend>예산<\/legend>/);
+});
+
+test('기본 사업 진입과 legacy workflow 경로는 사업정보로 정규화한다', () => {
+  const project = sampleProject();
+  const defaultHtml = renderProjectPage(project, school);
+  const legacyHtml = renderProjectPage(project, school, PROJECT_SECTION.WORKFLOW);
+  assert.match(defaultHtml, /data-project-view="business"/);
+  assert.match(legacyHtml, /data-project-view="business"/);
+  assert.doesNotMatch(defaultHtml, /data-project-view="workflow"|현장체험학습 업무 흐름/);
 });
 
 test('체험처 비용 화면은 학생용과 인솔자용을 함께 보여준다', () => {

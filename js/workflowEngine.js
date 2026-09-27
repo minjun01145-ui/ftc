@@ -348,7 +348,7 @@ function sourceOrder(a, b) {
   return number(a.priority, 10) - number(b.priority, 10);
 }
 
-export function calculateWorkflow(project, school = {}, { basis = 'plan' } = {}) {
+export function calculateWorkflow(project, school = {}, { basis = 'plan', useLegacySnapshotSchoolBudget = false } = {}) {
   const prepared = makeExpenseBasis(project, basis);
   const workflow = project.workflow ?? {};
   const sources = (workflow.resources ?? []).map((source, index) => ({ ...source, _index: index }))
@@ -366,9 +366,9 @@ export function calculateWorkflow(project, school = {}, { basis = 'plan' } = {})
     ...prepared.staffRows.map(row => row.refundIssue).filter(Boolean)
   ];
   const manualRows = workflow.manualAllocations ?? [];
-  const schoolBudgetEntry = school.projectBudgets?.[project.id];
-  const schoolCap = schoolBudgetEntry?.amount === null || schoolBudgetEntry?.amount === undefined
-    ? Number.POSITIVE_INFINITY : won(schoolBudgetEntry.amount);
+  const legacyBudget = useLegacySnapshotSchoolBudget ? school.projectBudgets?.[project.id] : null;
+  const schoolCap = legacyBudget?.amount === null || legacyBudget?.amount === undefined
+    ? Number.POSITIVE_INFINITY : won(legacyBudget.amount);
   let schoolRemaining = schoolCap;
 
   for (const source of sources) {
@@ -650,7 +650,7 @@ export function createConfirmedPlanSnapshot(project, school, confirmedAt = new D
     title: project.title,
     grade: project.grade,
     schoolYear: school.schoolYear,
-    schoolBudget: clone(school.projectBudgets?.[project.id] ?? { amount: null, fixed: false, targetBurden: null }),
+    schoolBudget: { amount: null, fixed: false, targetBurden: null },
     business: {
       executionMode: project.executionMode,
       startDate: project.startDate,
@@ -676,7 +676,7 @@ export function createConfirmedPlanSnapshot(project, school, confirmedAt = new D
       operationTotal: calculation.operationTotal,
       eventTotal: calculation.eventTotal,
       studentUsed: calculation.studentUsed,
-      schoolBudgetAmount: school.projectBudgets?.[project.id]?.amount ?? null,
+      schoolBudgetAmount: null,
       participants: calculation.attendance.participants,
       resourceTotals: calculation.resourceTotals.map(source => ({ ...source })),
       regularBurden: calculation.regularBurden,

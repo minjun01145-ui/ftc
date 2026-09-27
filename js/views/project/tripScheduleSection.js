@@ -28,10 +28,9 @@ export function renderTripScheduleSection(project) {
   return `
     <fieldset class="section-fieldset trip-schedule-section" data-project-section="business" data-trip-schedule-section>
       <legend>체험학습 일정 입력</legend>
-      <p class="section-note">파일 내용은 자동 입력되지 않습니다. 일정을 직접 입력하세요.</p>
       <div class="toolbar">
-        <input type="file" accept="${TRIP_SCHEDULE_FILE_ACCEPT}" multiple data-trip-schedule-upload aria-label="일정 참고 파일">
-        <span class="help" data-trip-schedule-upload-status></span>
+        <input type="file" accept="${TRIP_SCHEDULE_FILE_ACCEPT}" data-trip-schedule-upload aria-label="PDF 또는 HWPX 일정 문서 업로드">
+        <span class="help" data-trip-schedule-upload-status role="status" aria-live="polite"></span>
         <span class="spacer"></span>
         <button type="button" data-action="add-schedule-item">일정 항목 추가</button>
         <button type="button" data-action="edit-trip-schedule" ${hasItems ? '' : 'disabled'}>수정</button>
@@ -92,24 +91,22 @@ export function readTripScheduleSection(section, previousSchedule = { items: [] 
   };
 }
 
-export function updateTripScheduleUploadStatus(input, validation) {
+export function setTripScheduleUploadStatus(input, text, { error = false } = {}) {
   const section = input.closest('[data-trip-schedule-section]');
   const status = section?.querySelector('[data-trip-schedule-upload-status]');
   if (!status) return;
 
   status.classList.remove('error-text');
-  if (validation.rejected.length) {
-    status.textContent = 'PDF 또는 JPG 파일만 업로드할 수 있습니다.';
-    status.classList.add('error-text');
-    input.value = '';
-    return;
-  }
+  status.textContent = text;
+  if (error) status.classList.add('error-text');
+}
 
-  if (!validation.accepted.length) {
-    status.textContent = 'PDF 또는 JPG 파일을 선택할 수 있습니다.';
-    return;
-  }
-
-  const names = validation.accepted.map(file => file.name).join(', ');
-  status.textContent = `참고파일 선택: ${names} · 파일 내용은 자동 입력되지 않습니다.`;
+export function replaceTripScheduleDraft(section, items) {
+  if (!section || !Array.isArray(items) || !items.length) return false;
+  const tbody = section.querySelector('tbody');
+  if (!tbody) return false;
+  const draftItems = items.map(item => createTripScheduleItem(item));
+  tbody.innerHTML = scheduleRowsHtml(draftItems);
+  setTripScheduleEditing(section, true);
+  return true;
 }

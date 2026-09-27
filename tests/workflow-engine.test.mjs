@@ -154,6 +154,36 @@ test('학년별 정책 차이와 계약 후 불참 고정비를 분리해 계산
   assert.equal(third.resourceTotals.find(row => row.reportClass === 'education').balance, 1317400);
 });
 
+test('신규 계산은 legacy school.projectBudgets 배정액을 재원 한도로 사용하지 않는다', () => {
+  const project = exampleProject({
+    grade: 1, enrolled: 48, vulnerableEnrolled: 8, regularLimit: 0,
+    cultureAmount: 0, generalSchoolAmount: 3256000, grantAmount: 2465000, fixedCostAbsent: 0
+  });
+  const result = calculateWorkflow(project, schoolFor(project, 1000));
+  assert.equal(result.schoolUsed, 3256000);
+  assert.equal(result.issues.some(issue => issue.includes('학년 학교 예산 배정')), false);
+});
+
+test('과거 확정 스냅샷을 다시 계산할 때만 보존된 legacy 배정 한도를 적용할 수 있다', () => {
+  const project = exampleProject({
+    grade: 1, enrolled: 48, vulnerableEnrolled: 8, regularLimit: 0,
+    cultureAmount: 0, generalSchoolAmount: 3256000, grantAmount: 2465000, fixedCostAbsent: 0
+  });
+  const school = schoolFor(project, 1000);
+  const legacySnapshotCalculation = calculateWorkflow(project, school, { useLegacySnapshotSchoolBudget: true });
+  assert.equal(legacySnapshotCalculation.schoolUsed, 1000);
+});
+
+test('새 확정 스냅샷은 legacy schoolBudget 호환 필드를 중립값으로 저장한다', () => {
+  const project = exampleProject({
+    grade: 1, enrolled: 48, vulnerableEnrolled: 8, regularLimit: 0,
+    cultureAmount: 0, generalSchoolAmount: 3256000, grantAmount: 2465000, fixedCostAbsent: 0
+  });
+  const snapshot = createConfirmedPlanSnapshot(project, schoolFor(project, 1000), '2026-01-01T00:00:00.000Z');
+  assert.deepEqual(snapshot.schoolBudget, { amount: null, fixed: false, targetBurden: null });
+  assert.equal(snapshot.calculations.schoolBudgetAmount, null);
+});
+
 test('목적 제한 재원은 허용 항목에만 쓰고 예산 부족을 학생 잔액에 드러낸다', () => {
   const project = twoYearProject();
   project.workflow.resources = project.workflow.resources.map(source => source.id === 'culture-school-2'
@@ -319,8 +349,8 @@ test('확정 계획은 실제 인원 변경과 정산 뒤에도 스냅샷 값으
   const project = twoYearProject();
   const school = schoolFor(project, 2676500);
   const snapshot = createConfirmedPlanSnapshot(project, school, '2026-02-20T00:00:00.000Z');
-  assert.equal(snapshot.schoolBudget.amount, 2676500);
-  assert.equal(snapshot.calculations.schoolBudgetAmount, 2676500);
+  assert.deepEqual(snapshot.schoolBudget, { amount: null, fixed: false, targetBurden: null });
+  assert.equal(snapshot.calculations.schoolBudgetAmount, null);
   project.workflow.confirmedPlan = snapshot;
   project.workflow.confirmedPlans = [snapshot];
   project.workflow.actual.attendance = {

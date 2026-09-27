@@ -14,7 +14,9 @@ DOM, localStorage, 네트워크와 무관한 계산 규칙을 둡니다.
 
 ### `js/workflowEngine.js`
 
-통합 업무 흐름의 순수 계산 경계입니다. 계획/실적 인원 요약, 목적·집단별 재원 배분, 수동 배분 검증, 정수 원 품의 행, 확정 계획 사본, 행정실 대조, 지원금 반납 대조와 학교 예산 제안을 담당합니다. DOM, localStorage, 네트워크를 가져오지 않습니다.
+기존 계획/실적 계산, 목적·집단별 재원 배분, 수동 배분 검증, 정수 원 품의 행, 확정 계획 사본, 행정실 대조와 지원금 반납 대조를 담당하는 순수 계산 경계입니다. 일반 사업 메뉴에서는 workflow 화면을 열지 않지만, 기존 workflow 데이터와 확정 스냅샷은 호환성을 위해 보존합니다. DOM, localStorage, 네트워크를 가져오지 않습니다.
+
+신규 계산에서 `school.projectBudgets`를 한도나 재원으로 사용하지 않습니다. 학교 지원액과 한도는 사업의 `schoolSupport` 및 해당 사업의 재원 목록을 기준으로 계산합니다. 기존 학교 `projectBudgets` 값과 과거 확정 스냅샷은 가져오기/정규화 과정에서 삭제하지 않으며, 과거 스냅샷을 내보낼 때 저장 당시의 legacy 배정 한도를 재현할 수 있습니다.
 
 학생 부담 보고 분류는 학생이 낼 금액을 항목·집단별 재원으로 표시합니다. 이 금액도 전체 학생 부담 합계와 비취약 학생 실부담에 포함하며, 자동 잔여 학생 부담은 별도로 남깁니다.
 
@@ -46,11 +48,13 @@ HTML 생성, 폼 값 읽기, DOM 조작을 담당합니다.
 
 부산 학교 검색과 공시 학생수 조회는 `js/services/schoolInfo.js`에서 요청하고, Firebase Functions의 학교 전용 `functions/src/schoolData/` 코드베이스가 학교알리미 학교기본정보·학생수 응답을 화면에서 쓰는 정보로 정리합니다. 학교 코드베이스는 `SCHOOL_DATA_API_KEYS`만 사용하고 AI 모듈·설정·시크릿을 가져오지 않습니다.
 
+`js/services/scheduleDocumentImport.js`는 한 개의 PDF/HWPX 일정 문서를 검증해 `trip-schedule-from-document` capability에 전달합니다. 가져오기 결과는 화면의 일정 초안으로만 적용하며, localStorage를 변경하지 않습니다. 저장 버튼 처리는 기존 일정 저장 흐름이 담당합니다.
+
 `js/services/workbookExport.js`는 지원금 정산 제출 서식의 셀 매핑과 XLSX 패키지 생성을 담당합니다. 재원 배분 규칙을 복제하지 않고 `workflowEngine.js`가 만든 계산 결과를 사용합니다. 서식 구조가 바뀌면 매핑과 대표 셀·병합·수식 테스트를 함께 갱신합니다.
 
 ### `js/ai/`, `ai-functions/src/`
 
-AI는 아직 배포하지 않은 별도 Firebase 코드베이스 `ai`에 둡니다. 학교 기능과 코드, 의존성, 환경변수, 시크릿을 공유하지 않습니다. AI는 기존 계산의 기준값을 대신하지 않고 `engine.js`가 만든 구조화된 값의 설명, 추천, 문서화 같은 보조 기능으로 붙이는 것을 기본 원칙으로 합니다.
+문서 업로드는 `aiDocumentGateway` 전용 multipart 경로를 사용하고, 기존 JSON `/aiGateway`의 64 KiB 경로를 공유하지 않습니다. 문서 parser, PDF/HWPX 텍스트 추출기, 고정 capability와 provider 구현은 AI 코드베이스 안에서만 둡니다. 이 checkout은 AI URL과 Firebase 프로젝트가 설정되어 있지 않으므로 실제 배포 여부를 추정하지 않습니다. 설정이 비어 있는 프런트엔드는 `AI_NOT_CONFIGURED` 상태를 반환해야 합니다.
 
 ## 학생·인솔자·운영경비 합계
 
