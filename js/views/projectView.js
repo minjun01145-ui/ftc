@@ -18,7 +18,7 @@ function renderBusinessSections(project, school) {
 function renderOverview(project, school) {
   return `
     ${renderBusinessSections(project, school)}
-    ${renderHeadcountSection(project)}
+    ${renderHeadcountSection(project, school)}
     ${renderExpenseSections(project)}
     ${renderBudgetSection(project)}
     ${renderReportSection(project, { showPrint: false })}
@@ -34,7 +34,7 @@ function renderSection(project, school, section) {
     case PROJECT_SECTION.BUSINESS:
       return renderBusinessSections(project, school);
     case PROJECT_SECTION.HEADCOUNT:
-      return renderHeadcountSection(project);
+      return renderHeadcountSection(project, school);
     case PROJECT_SECTION.EXPENSES:
       return renderExpenseSections(project);
     case PROJECT_SECTION.BUDGET:
@@ -62,6 +62,28 @@ function has(data, name) {
   return data.has(name);
 }
 
+function countInput(value) {
+  const text = String(value ?? '').trim();
+  return text === '' ? 0 : Number(text);
+}
+
+// 인원 화면은 실제 참여자와 그 중 취약계층만 받으므로 불참·미신청 단계는 0으로 둡니다.
+function headcountAttendance(previousAttendance, previousTotal, { participants, vulnerableParticipants }) {
+  const legacy = previousAttendance.schema === 'legacy-v5' || previousAttendance.legacyAttendance
+    ? { legacyAttendance: previousAttendance.legacyAttendance ?? previousAttendance }
+    : {};
+  return {
+    schema: 'core-v1',
+    applicants: participants,
+    chaperones: summarizeAttendance(previousAttendance, previousTotal).chaperones,
+    vulnerableEnrolled: vulnerableParticipants,
+    vulnerableNotApplied: 0,
+    vulnerableDayAbsent: 0,
+    regularDayAbsent: 0,
+    ...legacy
+  };
+}
+
 export function readProjectForm(form, previous) {
   const data = new FormData(form);
   const next = { ...previous };
@@ -77,6 +99,15 @@ export function readProjectForm(form, previous) {
   if (has(data, 'totalStudents')) {
     const rawTotal = String(data.get('totalStudents') ?? '');
     next.totalStudents = rawTotal === '' ? 0 : Number(rawTotal);
+    if (has(data, 'actualParticipants')) {
+      next.workflow = {
+        ...next.workflow,
+        attendance: headcountAttendance(next.workflow?.attendance ?? {}, previous.totalStudents, {
+          participants: countInput(data.get('actualParticipants')),
+          vulnerableParticipants: countInput(data.get('vulnerableParticipants'))
+        })
+      };
+    }
     const summary = summarizeAttendance(next.workflow?.attendance ?? {}, next.totalStudents);
     next.actualParticipants = summary.participants;
     next.absentStudents = Math.max(0, summary.enrolled - summary.participants);

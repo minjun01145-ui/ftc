@@ -72,12 +72,11 @@ export function renderValidation(project) {
 
 export function renderHeadcountReport(project) {
   const counts = projectCounts(project);
-  const vulnerableTotal = vulnerableStudentTotal(project);
   const totalParticipants = counts.participants + counts.chaperones;
 
   return `
     <div class="report-text" aria-live="polite">
-      <p>총학생수 ${counts.total}명 중 학생 불참자는 ${counts.absent}명으로 실제 참가학생 수는 ${counts.participants}명입니다. 인솔자 수는 ${counts.chaperones}명입니다. 총 참가자 수(인솔자 포함)는 ${totalParticipants}명입니다.</p>
-      <p>취약계층은 ${vulnerableTotal}명이며 그 중 불참자는 ${counts.vulnerableAbsent}명입니다.</p>
+      <p>해당 학년 학생수 ${counts.total}명 중 실제 참여 학생은 ${counts.participants}명(불참 ${counts.absent}명)입니다. 인솔자 수는 ${counts.chaperones}명이며, 총 참가자 수(인솔자 포함)는 ${totalParticipants}명입니다.</p>
+      <p>실제 참여 학생 중 취약계층은 ${counts.vulnerableParticipants}명, 비취약계층은 ${counts.regularParticipants}명입니다.</p>
     </div>`;
 }

@@ -8,7 +8,7 @@ import { scheduleUploadErrorMessage, validateScheduleFiles } from './services/sc
 import { createScheduleDocumentImportService } from './services/scheduleDocumentImport.js';
 import { createDefaultAiClient } from './ai/createDefaultAiClient.js';
 import { getState, persistState, replaceState, updateState } from './state.js';
-import { syncExpensesFromTripSchedule } from './tripSchedule.js';
+import { syncExpensesFromTripSchedule, tripScheduleDateRange } from './tripSchedule.js';
 import { downloadJson, escapeHtml, number } from './utils.js';
 import {
   addExpenseRow,
@@ -25,6 +25,7 @@ import {
 } from './views/expenseTable.js';
 import { readProjectForm, renderProjectPage } from './views/projectView.js';
 import { newAdminRowHtml, newManualRowHtml, newSourceRowHtml, readWorkflowForm } from './views/project/workflowSection.js';
+import { gradeStudentCount, headcountIssues } from './views/project/headcountSection.js';
 import {
   newTripScheduleRowHtml,
   readTripScheduleSection,
@@ -99,7 +100,12 @@ function canDiscardChanges() {
 function saveSchool(form) {
   const state = getState();
   const school = readSchoolForm(form, state.school);
-  updateState(next => { next.school = school; });
+  updateState(next => {
+    next.school = school;
+    next.projects = next.projects.map(project => (project.grade
+      ? { ...project, totalStudents: gradeStudentCount(school, project.grade) }
+      : project));
+  });
   persistState();
   render();
   showMessage('저장했습니다.');
@@ -237,6 +243,18 @@ function saveProject(form, messageText = '저장했습니다.') {
   if (!project) return;
 
   const nextProject = readProjectForm(form, project);
+  if (form.querySelector('[name="actualParticipants"]')) {
+    const attendance = nextProject.workflow?.attendance ?? {};
+    const issues = headcountIssues({
+      totalStudents: nextProject.totalStudents,
+      participants: attendance.applicants,
+      vulnerableParticipants: attendance.vulnerableEnrolled
+    });
+    if (issues.length) {
+      showMessage(issues[0]);
+      return;
+    }
+  }
   if (form.querySelector('[name="totalStudents"]')) {
     const issues = summarizeAttendance(nextProject.workflow?.attendance ?? {}, nextProject.totalStudents).issues;
     if (issues.length) {
@@ -313,11 +331,15 @@ function saveTripSchedule(form) {
 
   const tripSchedule = readTripScheduleSection(section, project.tripSchedule);
   const expenses = syncExpensesFromTripSchedule(tripSchedule, project.expenses);
+  const startDate = form.elements.startDate?.value ?? project.startDate;
+  const endDate = form.elements.endDate?.value ?? project.endDate;
   updateState(next => {
     const index = next.projects.findIndex(item => item.id === currentPage.projectId);
     if (index < 0) return;
     next.projects[index] = {
       ...next.projects[index],
+      startDate,
+      endDate,
       tripSchedule,
       expenses
     };
@@ -364,7 +386,13 @@ async function importTripScheduleDocument(input) {
       return;
     }
     dirty = true;
-    setTripScheduleUploadStatus(input, `${items.length}개 일정을 초안으로 가져왔습니다. 확인한 뒤 저장해 주세요.`);
+    const range = tripScheduleDateRange(items);
+    if (range) {
+      if (form.elements.startDate) form.elements.startDate.value = range.startDate;
+      if (form.elements.endDate) form.elements.endDate.value = range.endDate;
+    }
+    const rangeText = range ? ` 기간(${range.startDate} ~ ${range.endDate})도 입력했습니다.` : '';
+    setTripScheduleUploadStatus(input, `${items.length}개 일정을 초안으로 가져왔습니다.${rangeText} 확인한 뒤 저장해 주세요.`);
   } catch (error) {
     if (!main.contains(form) || requestId !== scheduleDocumentRequestId) return;
     const messageText = ['AI_NOT_CONFIGURED', 'AI_MODEL_NOT_CONFIGURED'].includes(error.code)
@@ -492,6 +520,11 @@ main.addEventListener('change', event => {
       : '교육지원청을 선택한 뒤 학교를 검색하세요.';
     setSchoolStatus(target.form, '학교명을 검색해 학교를 선택하면 학생수를 자동 조회합니다.');
     return;
+  }
+
+  if (target.matches('[data-headcount-grade]')) {
+    const total = target.form?.elements.totalStudents;
+    if (total) total.value = target.value ? String(gradeStudentCount(getState().school, target.value)) : '';
   }
 
   if (target.name === 'vulnerableFullSupport') {

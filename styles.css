@@ -236,6 +236,7 @@ table input[type="text"] { min-width: 150px; }
 }
 
 .section-fieldset { position: relative; }
+.section-fieldset:has(> .section-save) { padding-top: 40px; }
 .section-save {
   position: absolute;
   top: 7px;
