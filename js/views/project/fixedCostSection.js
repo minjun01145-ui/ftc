@@ -1,84 +1,131 @@
 import { projectCounts } from '../../engine.js';
 import {
-  FIXED_COST_ITEMS,
   FIXED_COST_MODES,
+  createCustomFixedCost,
   fixedCostBasisText,
   fixedCostBreakdown,
+  fixedCostStaffShares,
   normalizeFixedCosts
 } from '../../fixedCosts.js';
 import { escapeHtml, formatWon, number } from '../../utils.js';
 
 const money = value => formatWon(Math.round(number(value)));
-const fieldName = (key, field) => `fixedCost-${key}-${field}`;
 
-function modeCell(item, entry) {
+function countsOf(project) {
+  const c = projectCounts(project);
+  return { participants: c.participants, dayAbsent: c.contractedAbsent, chaperones: c.chaperones };
+}
+
+function modeCell(entry) {
   const options = Object.entries(FIXED_COST_MODES)
     .map(([mode, label]) => `<option value="${mode}" ${mode === entry.mode ? 'selected' : ''}>${label}</option>`)
     .join('');
-  const isTotal = entry.mode === 'total';
+  const disabled = entry.mode === 'total' ? '' : 'disabled';
   return `
     <div class="fixed-cost-mode">
-      <select name="${fieldName(item.key, 'mode')}" data-fixed-cost-mode aria-label="${escapeHtml(item.label)} 입력 방식">${options}</select>
+      <select data-fixed-field="mode" data-fixed-cost-mode aria-label="입력 방식">${options}</select>
       <label class="check-label" title="전체 계약액을 학생 + 인솔자 수로 나눕니다">
-        <input type="checkbox" name="${fieldName(item.key, 'includeChaperones')}" data-fixed-cost-chaperones
-          ${entry.includeChaperones ? 'checked' : ''} ${isTotal ? '' : 'disabled'}> 인솔자도 함께 부담
+        <input type="checkbox" data-fixed-field="includeChaperones" data-total-only ${entry.includeChaperones ? 'checked' : ''} ${disabled}> 인솔자도 함께 부담
+      </label>
+      <label class="check-label" title="1인당 금액의 1원 단위를 버리고 10원 단위로 맞춥니다">
+        <input type="checkbox" data-fixed-field="roundTo10" data-total-only ${entry.roundTo10 ? 'checked' : ''} ${disabled}> 1원 단위 버림
       </label>
     </div>`;
 }
 
-function fixedCostRow(item, entry, counts, options) {
-  const breakdown = fixedCostBreakdown(item, entry, counts, options);
-  const entered = entry.amount > 0;
+export function fixedCostRowHtml(entry, breakdown = null) {
+  const entered = breakdown && entry.amount > 0;
+  const name = entry.builtin
+    ? escapeHtml(entry.label)
+    : `<input type="text" data-fixed-field="label" value="${escapeHtml(entry.label)}" placeholder="항목 이름" aria-label="기타비 항목 이름">`;
   return `
-    <tr>
-      <th scope="row">${escapeHtml(item.label)}</th>
-      <td>${modeCell(item, entry)}</td>
-      <td><input type="number" min="0" step="1" name="${fieldName(item.key, 'amount')}" value="${number(entry.amount)}" aria-label="${escapeHtml(item.label)} 금액"></td>
+    <tr data-fixed-row data-fixed-id="${escapeHtml(entry.id)}" data-builtin="${entry.builtin ?? ''}">
+      <th scope="row">${name}</th>
+      <td>${modeCell(entry)}</td>
+      <td><input type="number" min="0" step="1" data-fixed-field="amount" value="${number(entry.amount)}" aria-label="금액"></td>
       <td class="number">${entered ? money(breakdown.perPerson) : '-'}${entered ? `<small>${escapeHtml(fixedCostBasisText(breakdown))}</small>` : ''}</td>
       <td class="number">${entered ? money(breakdown.studentTotal) : '-'}</td>
-      <td><input type="text" name="${fieldName(item.key, 'memo')}" value="${escapeHtml(entry.memo)}" placeholder="예: 2박" aria-label="${escapeHtml(item.label)} 내용"></td>
+      <td><input type="text" data-fixed-field="memo" value="${escapeHtml(entry.memo)}" placeholder="예: 2박" aria-label="내용"></td>
+      <td class="center">${entry.builtin ? '' : '<button type="button" class="small-button danger" data-action="delete-fixed-cost">삭제</button>'}</td>
     </tr>`;
+}
+
+function staffShareRows(project) {
+  return fixedCostStaffShares(project, countsOf(project))
+    .filter(share => share.kind === 'remainder')
+    .map(share => `
+      <tr class="auto-row">
+        <th scope="row">${escapeHtml(share.label)}</th>
+        <td colspan="3" class="help">자동 계산 · 인솔자 비용으로 처리합니다</td>
+        <td class="number">${money(share.total)}</td>
+        <td colspan="2"></td>
+      </tr>`).join('');
 }
 
 /** 체험처/비용 화면의 기타비 입력 표. 1인당 금액과 합계는 저장한 인원 기준으로 보여 준다. */
 export function renderFixedCostTable(project) {
-  const fixedCosts = normalizeFixedCosts(project.fixedCosts);
-  const c = projectCounts(project);
-  const counts = { participants: c.participants, dayAbsent: c.contractedAbsent, chaperones: c.chaperones };
+  const counts = countsOf(project);
   const options = { dayAbsentSharesCommonCost: Boolean(project.dayAbsentSharesCommonCost) };
-  const rows = FIXED_COST_ITEMS.map(item => fixedCostRow(item, fixedCosts[item.key], counts, options)).join('');
+  const rows = normalizeFixedCosts(project.fixedCosts)
+    .map(entry => fixedCostRowHtml(entry, fixedCostBreakdown(entry, counts, options)))
+    .join('');
 
   return `
     <div class="fixed-cost-block" data-fixed-cost-section>
-      <h3>기타비</h3>
-      <p class="help">전체 계약액은 인원으로 나눠 1인당 금액을 만들고 10원 미만은 버립니다. '인솔자도 함께 부담'을 체크하면 학생 + 인솔자(${counts.chaperones}명) 수로 나눕니다. 금액은 저장하면 다시 계산됩니다.</p>
+      <div class="block-head">
+        <h3>기타비</h3>
+        <button type="button" class="small-button" data-action="add-fixed-cost">기타비 항목 추가</button>
+      </div>
+      <p class="help">전체 계약액은 인원으로 나눠 1인당 금액을 만듭니다. '인솔자도 함께 부담'은 학생 + 인솔자(${counts.chaperones}명) 수로 나누고, '1원 단위 버림'은 1인당 금액을 10원 단위로 맞춥니다. 나누고 남은 금액(버림 잔액)은 아래에 자동으로 표시되고 인솔자 비용으로 처리됩니다.</p>
       <div class="table-wrap">
         <table class="compact-table fixed-cost-table">
-          <thead><tr><th>항목</th><th>입력 방식</th><th>금액(원)</th><th>학생 1인당</th><th>학생 합계</th><th>내용</th></tr></thead>
-          <tbody>${rows}</tbody>
+          <thead><tr><th>항목</th><th>입력 방식</th><th>금액(원)</th><th>학생 1인당</th><th>학생 합계</th><th>내용</th><th>삭제</th></tr></thead>
+          <tbody data-fixed-cost-list>${rows}${staffShareRows(project)}</tbody>
         </table>
       </div>
     </div>`;
 }
 
-/** 입력 방식을 바꾸면 '인솔자도 함께 부담'은 전체 계약액일 때만 고를 수 있게 한다. */
-export function syncFixedCostModeControls(select) {
-  const checkbox = select.closest('.fixed-cost-mode')?.querySelector('[data-fixed-cost-chaperones]');
-  if (checkbox) checkbox.disabled = select.value !== 'total';
+export function addFixedCostRow(button) {
+  const tbody = button.closest('[data-fixed-cost-section]')?.querySelector('[data-fixed-cost-list]');
+  if (!tbody) return;
+  const lastItem = [...tbody.querySelectorAll('[data-fixed-row]')].at(-1);
+  lastItem.insertAdjacentHTML('afterend', fixedCostRowHtml(createCustomFixedCost()));
+  lastItem.nextElementSibling?.querySelector('[data-fixed-field="label"]')?.focus();
 }
 
-/** 폼에 기타비 입력칸이 있으면 값을 읽고, 없으면 기존 값을 그대로 돌려준다. */
-export function readFixedCostInputs(data, previousFixedCosts) {
-  if (!data.has(fieldName(FIXED_COST_ITEMS[0].key, 'amount'))) return normalizeFixedCosts(previousFixedCosts);
+export function removeFixedCostRow(button) {
+  button.closest('[data-fixed-row]')?.remove();
+}
+
+/** 입력 방식을 바꾸면 전체 계약액 전용 체크박스를 켜고 끈다. */
+export function syncFixedCostModeControls(select) {
+  select.closest('.fixed-cost-mode')?.querySelectorAll('[data-total-only]').forEach(checkbox => {
+    checkbox.disabled = select.value !== 'total';
+  });
+}
+
+/** 폼에 기타비 표가 있으면 행을 읽고, 없으면 기존 값을 그대로 돌려준다. */
+export function readFixedCostInputs(form, previousFixedCosts) {
+  const tbody = form.querySelector('[data-fixed-cost-list]');
   const previous = normalizeFixedCosts(previousFixedCosts);
-  return normalizeFixedCosts(Object.fromEntries(FIXED_COST_ITEMS.map(item => {
-    const mode = data.get(fieldName(item.key, 'mode'));
-    return [item.key, {
+  if (!tbody) return previous;
+  const previousById = new Map(previous.map(entry => [entry.id, entry]));
+  return normalizeFixedCosts([...tbody.querySelectorAll('[data-fixed-row]')].map(row => {
+    const field = name => row.querySelector(`[data-fixed-field="${name}"]`);
+    const before = previousById.get(row.dataset.fixedId) ?? {};
+    const mode = field('mode').value;
+    return {
+      ...before,
+      id: row.dataset.fixedId,
+      builtin: row.dataset.builtin || null,
+      label: field('label')?.value.trim() ?? before.label,
       mode,
-      amount: data.get(fieldName(item.key, 'amount')),
-      // 1인당 금액일 때는 체크박스가 비활성이라 값이 오지 않으므로 이전 선택을 유지한다.
-      includeChaperones: mode === 'total' ? data.has(fieldName(item.key, 'includeChaperones')) : previous[item.key].includeChaperones,
-      memo: String(data.get(fieldName(item.key, 'memo')) ?? '').trim()
-    }];
-  })));
+      amount: field('amount').value,
+      // 1인당 금액일 때는 체크박스가 꺼져 있으므로 이전 선택을 유지한다.
+      includeChaperones: mode === 'total' ? field('includeChaperones').checked : before.includeChaperones,
+      roundTo10: mode === 'total' ? field('roundTo10').checked : before.roundTo10,
+      memo: field('memo').value.trim()
+    };
+  }));
 }

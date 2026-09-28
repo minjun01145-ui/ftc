@@ -532,3 +532,26 @@ table input[type="text"] { min-width: 150px; }
 .budget-card > .help { margin: 0 12px 6px; }
 .budget-card footer { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 12px; border-top: 1px solid #ddd; background: #fafafa; font-size: 13px; }
 .proposal-table tfoot tr.unassigned th, .proposal-table tfoot tr.unassigned td { color: #9a5b00; background: #fffaf0; }
+
+.block-head { display: flex; align-items: center; gap: 10px; }
+.block-head h3 { margin: 6px 0; }
+.fixed-cost-table tr.auto-row th, .fixed-cost-table tr.auto-row td { background: #f7f7f7; font-weight: normal; }
+
+/* 품의 도우미: 카드 머리의 메모·지원 금액 */
+.budget-card .budget-memo-text { margin: 2px 0 0; color: #3b5b7a; font-size: 12px; white-space: pre-wrap; }
+.budget-setting { display: flex; align-items: center; gap: 6px; margin: 6px 0 0; font-size: 13px; flex-wrap: wrap; }
+.budget-setting input { width: 110px; min-width: 0; }
+.budget-setting small { color: #666; }
+.budget-full-note { margin: 4px 12px 0; padding: 4px 8px; background: #fff4e0; color: #7a4a00; font-size: 12px; }
+.budget-card.is-full .meter span { background: #2f8a3a; }
+.card-actions { display: flex; gap: 4px; }
+
+/* 정산 서식 도우미 */
+.settlement-warnings { margin: 0 0 10px; padding: 8px 12px 8px 28px; border: 1px solid #e2c48a; background: #fffaf0; line-height: 1.7; }
+.settlement-table th[scope="row"] { width: 40px; background: #f4f4f4; }
+.settlement-table .settlement-value { font-weight: bold; white-space: normal; }
+.settlement-table tr.formula-row td { color: #666; }
+.settlement-table td.help { white-space: normal; }
+.settlement-remarks { border: 1px solid #bbb; background: #fafafa; padding: 10px 12px; white-space: pre-wrap; font-family: inherit; margin: 6px 0; }
+.budget-card footer { flex-wrap: wrap; }
+.card-actions .small-button { white-space: nowrap; }

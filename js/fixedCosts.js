@@ -1,70 +1,110 @@
-import { number } from './utils.js';
+import { number, uid } from './utils.js';
 
 /**
- * 체험처/비용 화면의 '기타비'(버스비·숙소비·보험비). 저장 키는 예전 이름 그대로 project.fixedCosts를 쓴다.
+ * 체험처/비용 화면의 '기타비'. 저장 키는 예전 이름 그대로 project.fixedCosts를 쓴다.
  *
- * project.fixedCosts = { bus: { mode, amount, includeChaperones, memo }, lodging: {...}, insurance: {...} }
+ * project.fixedCosts = [{ id, builtin, label, mode, amount, includeChaperones, roundTo10, commonCost, memo }, ...]
+ * - 기본 항목(버스비·숙소비·보험비)은 builtin에 키가 있고 지울 수 없다. 사용자가 항목을 더 추가할 수 있다.
  * - mode 'perPerson' : 입력한 1인당 금액을 그대로 쓴다.
- * - mode 'total'     : 전체 계약액을 인원으로 나눠 1인당 금액을 만든다(10원 미만 버림).
- *   includeChaperones가 켜져 있으면 학생 + 인솔자 수로 나눈다. 나누고 남은 금액은 학생 부담에서 빠진다.
- * 공통비용(commonCost): 인원 화면의 '당일 불참자 공통비용 부담'을 체크하면 당일 불참자도 학생 수에 들어간다.
+ * - mode 'total'     : 전체 계약액을 인원으로 나눠 1인당 금액을 만든다.
+ *     includeChaperones : 학생 + 인솔자 수로 나눈다(아니면 학생 수만).
+ *     roundTo10         : 1인당 금액의 1원 단위를 버린다(10원 단위로 맞춤).
+ *   나누고 남은 금액(인솔자 몫, 버림 잔액)은 학생 부담에서 빠지고 인솔자 비용으로 넘어간다.
+ * - commonCost : 인원 화면의 '당일 불참자 공통비용 부담'을 체크하면 당일 불참자도 학생 수에 들어간다.
  *
  * 예) 버스비 9,000,000원 ÷ (학생 71명 + 인솔자 8명) = 113,924원 → 113,920원
+ *     학생 71명 × 113,920원 = 8,088,320원, 인솔자 8명 × 113,920원 = 911,360원, 버림 잔액 320원
  */
 export const FIXED_COST_MODES = Object.freeze({
   perPerson: '1인당 금액',
   total: '전체 계약액'
 });
 
-export const FIXED_COST_ITEMS = Object.freeze([
-  Object.freeze({ key: 'bus', label: '버스비', category: 'vehicle', commonCost: true, defaultMode: 'total', defaultIncludeChaperones: true }),
-  Object.freeze({ key: 'lodging', label: '숙소비', category: 'lodging', commonCost: true, defaultMode: 'total', defaultIncludeChaperones: false }),
-  Object.freeze({ key: 'insurance', label: '보험비', category: 'insurance', commonCost: false, defaultMode: 'perPerson', defaultIncludeChaperones: false })
+export const BUILTIN_FIXED_COSTS = Object.freeze([
+  Object.freeze({ key: 'bus', label: '버스비', category: 'vehicle', commonCost: true, mode: 'total', includeChaperones: true }),
+  Object.freeze({ key: 'lodging', label: '숙소비', category: 'lodging', commonCost: true, mode: 'total', includeChaperones: false }),
+  Object.freeze({ key: 'insurance', label: '보험비', category: 'insurance', commonCost: false, mode: 'perPerson', includeChaperones: false })
 ]);
 
 export const FIXED_COST_EXPENSE_ID_PREFIX = 'fixed-';
 
+function builtinEntry(builtin, source = {}) {
+  return normalizeEntry({ ...source, id: builtin.key, builtin: builtin.key, label: builtin.label }, builtin);
+}
+
+export function createCustomFixedCost(overrides = {}) {
+  return normalizeEntry({ id: uid('custom'), builtin: null, label: '', mode: 'perPerson', ...overrides });
+}
+
 export function createFixedCosts() {
-  return Object.fromEntries(FIXED_COST_ITEMS.map(item => [item.key, {
-    mode: item.defaultMode, amount: 0, includeChaperones: item.defaultIncludeChaperones, memo: ''
-  }]));
+  return BUILTIN_FIXED_COSTS.map(builtin => builtinEntry(builtin));
 }
 
+function normalizeEntry(source, builtin = null) {
+  return {
+    id: String(source.id || uid('custom')),
+    builtin: builtin ? builtin.key : null,
+    label: builtin ? builtin.label : String(source.label ?? ''),
+    mode: Object.hasOwn(FIXED_COST_MODES, source.mode) ? source.mode : (builtin?.mode ?? 'perPerson'),
+    amount: Math.max(0, Math.round(number(source.amount))),
+    // 이전 버전은 버스비만 인솔자와 나눴고, 항상 10원 단위로 버렸다.
+    includeChaperones: typeof source.includeChaperones === 'boolean' ? source.includeChaperones : Boolean(builtin?.includeChaperones),
+    roundTo10: typeof source.roundTo10 === 'boolean' ? source.roundTo10 : true,
+    commonCost: builtin ? builtin.commonCost : false,
+    memo: String(source.memo ?? '')
+  };
+}
+
+/**
+ * 저장된 기타비를 정리한다. 기본 항목은 항상 앞에 두고, 사용자가 추가한 항목을 뒤에 붙인다.
+ * 이전 버전의 { bus: {...}, lodging: {...}, insurance: {...} } 형태도 받는다.
+ */
 export function normalizeFixedCosts(value) {
-  const source = value && typeof value === 'object' ? value : {};
-  return Object.fromEntries(FIXED_COST_ITEMS.map(item => {
-    const entry = source[item.key] && typeof source[item.key] === 'object' ? source[item.key] : {};
-    return [item.key, {
-      mode: Object.hasOwn(FIXED_COST_MODES, entry.mode) ? entry.mode : item.defaultMode,
-      amount: Math.max(0, Math.round(number(entry.amount))),
-      // 이전 버전은 버스비만 항상 인솔자와 나눴으므로, 값이 없으면 항목 기본값을 쓴다.
-      includeChaperones: typeof entry.includeChaperones === 'boolean' ? entry.includeChaperones : item.defaultIncludeChaperones,
-      memo: String(entry.memo ?? '')
-    }];
-  }));
+  const entries = Array.isArray(value)
+    ? value.filter(item => item && typeof item === 'object')
+    : Object.entries(value && typeof value === 'object' ? value : {}).map(([key, entry]) => ({ ...entry, builtin: key }));
+  const builtins = BUILTIN_FIXED_COSTS.map(builtin => builtinEntry(builtin, entries.find(entry => entry.builtin === builtin.key)));
+  const custom = entries.filter(entry => !entry.builtin).map(entry => normalizeEntry(entry));
+  return [...builtins, ...custom];
 }
 
-const floorTo10 = value => Math.floor(value / 10) * 10;
+export function fixedCostLineId(entry) {
+  return `${FIXED_COST_EXPENSE_ID_PREFIX}${entry.id}`;
+}
+
+const floorTo = (value, unit) => Math.floor(value / unit) * unit;
 const won = value => `${Math.round(number(value)).toLocaleString('ko-KR')}원`;
 
 /**
- * 기타비 한 항목의 학생 1인당 금액과 학생 부담 합계.
+ * 기타비 한 항목의 학생 1인당 금액, 학생 합계, 인솔자 몫, 버림 잔액.
  * counts: { participants, dayAbsent, chaperones }
  */
-export function fixedCostBreakdown(item, entry, counts, { dayAbsentSharesCommonCost = false } = {}) {
+export function fixedCostBreakdown(entry, counts, { dayAbsentSharesCommonCost = false } = {}) {
   const amount = Math.max(0, number(entry?.amount));
-  const includesDayAbsent = Boolean(item.commonCost && dayAbsentSharesCommonCost);
+  const includesDayAbsent = Boolean(entry?.commonCost && dayAbsentSharesCommonCost);
   const dayAbsent = includesDayAbsent ? Math.max(0, number(counts.dayAbsent)) : 0;
   const students = Math.max(0, number(counts.participants)) + dayAbsent;
+  const base = { amount, students, includesDayAbsent, dayAbsent };
 
   if (entry?.mode === 'perPerson') {
-    return { mode: 'perPerson', amount, perPerson: amount, students, chaperones: 0, divisor: students, studentTotal: amount * students, remainder: 0, includesDayAbsent, dayAbsent };
+    return { ...base, mode: 'perPerson', perPerson: amount, chaperones: 0, divisor: students, studentTotal: amount * students, chaperoneTotal: 0, remainder: 0, roundTo10: false };
   }
   const chaperones = entry?.includeChaperones ? Math.max(0, number(counts.chaperones)) : 0;
   const divisor = students + chaperones;
-  const perPerson = divisor > 0 && students > 0 ? floorTo10(amount / divisor) : 0;
+  const perPerson = divisor > 0 && students > 0 ? floorTo(amount / divisor, entry?.roundTo10 ? 10 : 1) : 0;
   const studentTotal = perPerson * students;
-  return { mode: 'total', amount, perPerson, students, chaperones, divisor, studentTotal, remainder: amount - studentTotal, includesDayAbsent, dayAbsent };
+  const chaperoneTotal = perPerson * chaperones;
+  return {
+    ...base,
+    mode: 'total',
+    perPerson,
+    chaperones,
+    divisor,
+    studentTotal,
+    chaperoneTotal,
+    remainder: students > 0 ? amount - studentTotal - chaperoneTotal : 0,
+    roundTo10: Boolean(entry?.roundTo10)
+  };
 }
 
 /** 1인당 금액이 어떻게 나왔는지 사람이 읽을 수 있게 설명한다(산출내역 비고란). */
@@ -74,8 +114,12 @@ export function fixedCostBasisText(breakdown) {
   const people = breakdown.chaperones > 0
     ? `(학생 ${breakdown.students}명${absent} + 인솔자 ${breakdown.chaperones}명)`
     : `학생 ${breakdown.students}명${absent}`;
-  const exact = breakdown.divisor > 0 && breakdown.amount / breakdown.divisor === breakdown.perPerson;
-  return `총액 ${won(breakdown.amount)} ÷ ${people}${exact ? '' : ', 10원 미만 버림'}`;
+  const rounding = breakdown.remainder > 0 ? `, ${breakdown.roundTo10 ? '1원 단위' : '원 미만'} 버림` : '';
+  return `총액 ${won(breakdown.amount)} ÷ ${people}${rounding}`;
+}
+
+function countsOptions(project) {
+  return { dayAbsentSharesCommonCost: Boolean(project?.dayAbsentSharesCommonCost) };
 }
 
 /**
@@ -83,21 +127,18 @@ export function fixedCostBasisText(breakdown) {
  * 1인당 금액을 미리 계산해 두므로 엔진은 다른 체험처와 똑같이 '1인당 금액 × 인원'으로 계산한다.
  */
 export function fixedCostExpenses(project, counts) {
-  const fixedCosts = normalizeFixedCosts(project?.fixedCosts);
-  const options = { dayAbsentSharesCommonCost: Boolean(project?.dayAbsentSharesCommonCost) };
-  return FIXED_COST_ITEMS
-    .filter(item => fixedCosts[item.key].amount > 0)
-    .map(item => {
-      const entry = fixedCosts[item.key];
-      const breakdown = fixedCostBreakdown(item, entry, counts, options);
+  return normalizeFixedCosts(project?.fixedCosts)
+    .filter(entry => entry.amount > 0)
+    .map(entry => {
+      const breakdown = fixedCostBreakdown(entry, counts, countsOptions(project));
       return {
-        id: `${FIXED_COST_EXPENSE_ID_PREFIX}${item.key}`,
-        fixedCostKey: item.key,
+        id: fixedCostLineId(entry),
+        fixedCostKey: entry.id,
         date: '',
-        name: item.label,
+        name: entry.label || '기타비',
         description: entry.memo,
         basis: fixedCostBasisText(breakdown),
-        category: item.category,
+        category: BUILTIN_FIXED_COSTS.find(builtin => builtin.key === entry.builtin)?.category ?? 'other',
         costOwner: 'student',
         calcMethod: 'perPerson',
         quantityBase: breakdown.includesDayAbsent ? 'participantsPlusAbsent' : 'participants',
@@ -109,5 +150,26 @@ export function fixedCostExpenses(project, counts) {
         customCohorts: null,
         note: ''
       };
+    });
+}
+
+/**
+ * 전체 계약액에서 학생 몫을 빼고 남은 금액: 인솔자 몫과 버림 잔액. 인솔자 비용으로 처리한다.
+ * 예) 버스비 → 인솔자 8명 × 113,920원 = 911,360원, 버림 잔액 320원
+ */
+export function fixedCostStaffShares(project, counts) {
+  return normalizeFixedCosts(project?.fixedCosts)
+    .filter(entry => entry.amount > 0 && entry.mode === 'total')
+    .flatMap(entry => {
+      const breakdown = fixedCostBreakdown(entry, counts, countsOptions(project));
+      const label = entry.label || '기타비';
+      const shares = [];
+      if (breakdown.chaperoneTotal > 0) {
+        shares.push({ id: `${entry.id}-chaperones`, label: `${label} 인솔자 몫`, kind: 'chaperones', count: breakdown.chaperones, perPerson: breakdown.perPerson, total: breakdown.chaperoneTotal });
+      }
+      if (breakdown.remainder > 0) {
+        shares.push({ id: `${entry.id}-remainder`, label: `${label} 버림 잔액`, kind: 'remainder', count: null, perPerson: null, total: breakdown.remainder });
+      }
+      return shares;
     });
 }

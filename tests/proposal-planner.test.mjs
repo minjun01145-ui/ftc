@@ -10,7 +10,8 @@ import {
   VULNERABLE_BUDGET_ID,
   budgetChecklist,
   buildProposal,
-  findAllocationResult
+  findAllocationResult,
+  withBudgetAmount
 } from '../js/proposalPlanner.js';
 
 // 2026학년도 2학년 수학여행 비용 산출 근거자료.xlsx 와 같은 조건
@@ -76,7 +77,7 @@ test('학생 1인별 금액 산출 내역은 엑셀과 같고 기타비 비고�
   assert.equal(lines.length, 11);
   assert.equal(byName['버스비'].perPerson, 113920);
   assert.equal(byName['버스비'].quantity, 71);
-  assert.equal(byName['버스비'].basis, '총액 9,000,000원 ÷ (학생 71명(당일 불참 1명 포함) + 인솔자 8명), 10원 미만 버림');
+  assert.equal(byName['버스비'].basis, '총액 9,000,000원 ÷ (학생 71명(당일 불참 1명 포함) + 인솔자 8명), 1원 단위 버림');
   assert.equal(byName['숙소비'].basis, '총액 5,039,580원 ÷ 학생 71명(당일 불참 1명 포함)');
   assert.equal(byName['숙소비'].description, '2박');
   assert.equal(byName['보험비'].basis, '1인당 금액 1,600원 입력, 학생 70명');
@@ -140,4 +141,21 @@ test('체크를 빼면 뒤에 체크한 항목의 금액이 다시 계산되고,
 test('예전 저장 형식(항목별 예산 선택)은 체크 순서로 옮긴다', () => {
   const plan = normalizeProposalPlan({ assignments: { b: 'education', a: 'school' }, order: ['a', 'b'] });
   assert.deepEqual(plan.allocations, [{ budgetId: 'school', lineId: 'a' }, { budgetId: 'education', lineId: 'b' }]);
+});
+
+test('예산이 가득 차면 체크하지 않은 다른 항목은 잠기고, 지원 금액을 고치면 다시 풀린다', () => {
+  const project = excelProject();
+  project.proposalPlan = addAllocations(normalizeProposalPlan({}), EDUCATION_BUDGET_ID,
+    ['fixed-bus', 'fixed-lodging', 'fixed-insurance', 'ticket', 'meal-coupon']);
+  const full = budgetChecklist(buildProposal(project), EDUCATION_BUDGET_ID);
+  assert.equal(full.find(item => item.line.id === 'dinner2').locked, true);
+  assert.equal(full.find(item => item.line.id === 'dinner2').lockReason, 'full');
+
+  const raised = withBudgetAmount(project, EDUCATION_BUDGET_ID, 300000);
+  assert.equal(raised.educationSupport.regularPerPerson, 300000);
+  const reopened = budgetChecklist(buildProposal(raised), EDUCATION_BUDGET_ID);
+  assert.equal(reopened.find(item => item.line.id === 'dinner2').locked, false);
+
+  const school = withBudgetAmount(project, 'school', 40000);
+  assert.equal(school.otherSupports.find(support => support.id === 'school').amount, 40000);
 });

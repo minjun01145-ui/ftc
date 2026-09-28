@@ -26,7 +26,7 @@ function guideBox() {
     <div class="proposal-howto">
       <strong>사용 방법</strong>
       <ol>
-        <li>예산 관리에서 입력한 예산이 카드로 나옵니다. 각 카드에 그 예산으로 낼 비용 항목을 체크하세요.</li>
+        <li>예산 관리에서 입력한 예산이 카드로 나옵니다. 카드에서 지원 금액을 바로 고칠 수 있고, 그 예산으로 낼 비용 항목을 체크하세요.</li>
         <li>체크한 순서대로 예산을 채웁니다. 예산을 넘으면 넣을 수 있는 만큼만 넣고, 나머지 금액은 다른 예산 카드에서 체크할 수 있게 남겨 둡니다.</li>
         <li>모든 금액을 배정하면 아래에 품의 방법과 예산별 품의 내용이 정리됩니다.</li>
       </ol>
@@ -55,9 +55,18 @@ function progressBox(proposal) {
 
 /* ---------- 예산 카드 ---------- */
 
-function capText(budget) {
-  if (Number.isFinite(budget.capPerPerson)) return `1인당 한도 ${won(budget.capPerPerson)}원`;
-  return budget.id === VULNERABLE_BUDGET_ID ? '실비 전액 지원(한도 없음)' : '한도 없음';
+function settingEditor(budget) {
+  const { setting } = budget;
+  if (!setting) return '<p class="budget-setting">한도 없음 · 다른 예산에서 남은 금액을 넣습니다</p>';
+  if (setting.mode === 'full') return '<p class="budget-setting">실비 전액 지원(한도 없음) <small>예산 관리에서 바꿀 수 있습니다</small></p>';
+  const label = setting.mode === 'total' ? '총액' : '1인당';
+  const perPerson = setting.mode === 'total' && Number.isFinite(budget.capPerPerson)
+    ? ` <small>= 1인당 ${won(budget.capPerPerson)}원</small>` : '';
+  return `
+    <label class="budget-setting">${label}
+      <input type="number" min="0" step="1" value="${number(setting.amount)}" data-proposal-budget-amount data-budget-id="${escapeHtml(budget.id)}" aria-label="${escapeHtml(budget.name)} ${label} 지원 금액">
+      원 지원${perPerson}
+    </label>`;
 }
 
 function meter(block) {
@@ -66,38 +75,36 @@ function meter(block) {
   }
   const cap = block.budget.capPerPerson;
   const ratio = cap > 0 ? Math.min(100, Math.round((block.usedPerPerson / cap) * 100)) : 0;
-  const status = block.unusedPerPerson > 0
-    ? `남은 한도 ${won(block.unusedPerPerson)}원`
-    : '<span class="ok-text">한도를 모두 채웠습니다</span>';
+  const status = block.full
+    ? '<span class="ok-text">한도를 모두 채웠습니다</span>'
+    : `남은 한도 ${won(block.unusedPerPerson)}원`;
   return `
     <div class="meter" role="img" aria-label="한도의 ${ratio}% 사용"><span style="width:${ratio}%"></span></div>
     <p class="budget-card-usage">1인당 ${won(block.usedPerPerson)}원 사용 · ${status}</p>`;
 }
 
-function checklistItem(budgetId, { line, checked, result, available }) {
+function checklistItem(budgetId, { line, checked, result, available, locked, lockReason }) {
   const id = `proposal-${budgetId}-${line.id}`.replace(/[^\w-]/g, '_');
   let amount;
   let note = '';
-  let disabled = false;
   if (checked && result.perPerson <= 0) {
     amount = '0원';
-    note = '<span class="warn-text">예산이 가득 차서 넣지 못했습니다.</span>';
+    note = '<span class="warn-text">예산이 가득 차서 넣지 못했습니다. 체크를 빼 주세요.</span>';
   } else if (checked) {
     amount = `${won(result.perPerson)}원`;
     if (result.overBudget) {
       note = `<span class="warn-text">예산 초과: ${won(result.requested)}원 중 ${won(result.perPerson)}원만 넣었습니다. 남은 ${won(result.left)}원은 다른 예산에서 체크하세요.</span>`;
     }
-  } else if (available > 0) {
-    amount = available < line.perPerson ? `남은 ${won(available)}원` : `${won(available)}원`;
-  } else {
+  } else if (lockReason === 'assigned') {
     amount = '다른 예산에 배정 완료';
-    disabled = true;
+  } else {
+    amount = available < line.perPerson ? `남은 ${won(available)}원` : `${won(available)}원`;
   }
   return `
-    <li class="${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''}">
+    <li class="${checked ? 'checked' : ''} ${locked ? 'disabled' : ''}">
       <label for="${id}">
         <input type="checkbox" id="${id}" data-proposal-toggle data-budget-id="${escapeHtml(budgetId)}" data-line-id="${escapeHtml(line.id)}"
-          ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''}>
+          ${checked ? 'checked' : ''} ${locked ? 'disabled' : ''}>
         <span class="item-name">${escapeHtml(lineLabel(line))}</span>
         <span class="item-amount">${amount}</span>
       </label>
@@ -109,21 +116,31 @@ function budgetCard(proposal, block) {
   const { budget } = block;
   if (budget.id === VULNERABLE_BUDGET_ID && budget.count <= 0) return '';
   const items = budgetChecklist(proposal, budget.id);
-  const canFill = items.some(item => !item.checked && item.available > 0);
+  const canFill = items.some(item => !item.checked && !item.locked);
+  const canClear = items.some(item => item.checked);
+  const fullNote = block.full && items.some(item => item.lockReason === 'full')
+    ? '<p class="budget-full-note">예산이 가득 찼습니다. 다른 항목을 넣으려면 체크를 빼거나 지원 금액을 늘리세요.</p>'
+    : '';
   const dayAbsentNote = budget.id === EDUCATION_BUDGET_ID && proposal.dayAbsentTotal > 0
     ? `<p class="help">당일 불참 ${proposal.counts.dayAbsent}명의 ${proposal.dayAbsent.map(item => item.name).join('·')} ${won(proposal.dayAbsentTotal)}원도 이 예산에서 자동으로 품의합니다.</p>`
     : '';
   return `
-    <section class="budget-card ${budget.group}">
+    <section class="budget-card ${budget.group} ${block.full ? 'is-full' : ''}">
       <header>
         <h3>${escapeHtml(budget.name)}</h3>
-        <p>${budget.count}명 · ${capText(budget)}</p>
+        ${budget.memo ? `<p class="budget-memo-text">${escapeHtml(budget.memo)}</p>` : ''}
+        <p>${budget.count}명</p>
+        ${settingEditor(budget)}
       </header>
       ${meter(block)}
+      ${fullNote}
       <ul class="budget-checklist">${items.map(item => checklistItem(budget.id, item)).join('')}</ul>
       ${dayAbsentNote}
       <footer>
-        <button type="button" class="small-button" data-action="proposal-fill-budget" data-budget-id="${escapeHtml(budget.id)}" ${canFill ? '' : 'disabled'}>남은 항목 모두 넣기</button>
+        <div class="card-actions">
+          <button type="button" class="small-button" data-action="proposal-fill-budget" data-budget-id="${escapeHtml(budget.id)}" ${canFill ? '' : 'disabled'}>남은 항목 모두 넣기</button>
+          <button type="button" class="small-button" data-action="proposal-clear-budget" data-budget-id="${escapeHtml(budget.id)}" ${canClear ? '' : 'disabled'}>모두 해제</button>
+        </div>
         <span>${budget.count}명 × ${won(block.usedPerPerson)}원 = <strong>${won(block.total)}원</strong></span>
       </footer>
     </section>`;

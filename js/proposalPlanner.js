@@ -20,23 +20,31 @@ export const VULNERABLE_BUDGET_ID = 'education-vulnerable';
 export const EDUCATION_BUDGET_ID = 'education';
 export const STUDENT_BUDGET_ID = 'student';
 
+/**
+ * 예산 카드 목록. setting은 품의 도우미에서 바로 고칠 수 있는 지원 금액이다.
+ *   { mode: 'perPerson' | 'total' | 'full', amount }  (full = 실비 전액, 금액 입력 없음)
+ */
 export function proposalBudgets(project, counts) {
   const education = project.educationSupport ?? {};
+  const memos = education.memos ?? {};
+  const vulnerableFull = education.vulnerableMode !== 'perPerson';
   return [
     {
       id: VULNERABLE_BUDGET_ID,
       name: '교육청 지원금(취약계층)',
       group: 'vulnerable',
       count: counts.vulnerable,
-      capPerPerson: education.vulnerableMode === 'perPerson'
-        ? Math.max(0, number(education.vulnerablePerPerson))
-        : Number.POSITIVE_INFINITY
+      memo: String(memos.vulnerable ?? ''),
+      setting: { mode: vulnerableFull ? 'full' : 'perPerson', amount: Math.max(0, number(education.vulnerablePerPerson)) },
+      capPerPerson: vulnerableFull ? Number.POSITIVE_INFINITY : Math.max(0, number(education.vulnerablePerPerson))
     },
     {
       id: EDUCATION_BUDGET_ID,
       name: '교육청 지원금(비취약계층)',
       group: 'regular',
       count: counts.regular,
+      memo: String(memos.regular ?? ''),
+      setting: { mode: 'perPerson', amount: Math.max(0, number(education.regularPerPerson)) },
       capPerPerson: Math.max(0, number(education.regularPerPerson))
     },
     ...(project.otherSupports ?? []).map(support => ({
@@ -44,10 +52,28 @@ export function proposalBudgets(project, counts) {
       name: `기타 지원금(${support.name || '이름 없음'})`,
       group: 'regular',
       count: counts.regular,
+      memo: String(support.memo ?? ''),
+      source: support.source ?? 'school',
+      setting: { mode: support.mode === 'total' ? 'total' : 'perPerson', amount: Math.max(0, number(support.amount)) },
       capPerPerson: otherSupportPerPerson(support, counts.regular)
     })),
-    { id: STUDENT_BUDGET_ID, name: '수익자 부담', group: 'regular', count: counts.regular, capPerPerson: Number.POSITIVE_INFINITY }
+    { id: STUDENT_BUDGET_ID, name: '수익자 부담', group: 'regular', count: counts.regular, memo: '', setting: null, capPerPerson: Number.POSITIVE_INFINITY }
   ];
+}
+
+/** 품의 도우미에서 고친 지원 금액을 사업 데이터에 반영한다(예산 관리와 같은 값). */
+export function withBudgetAmount(project, budgetId, amount) {
+  const value = Math.max(0, Math.round(number(amount)));
+  if (budgetId === EDUCATION_BUDGET_ID) {
+    return { ...project, educationSupport: { ...project.educationSupport, regularPerPerson: value } };
+  }
+  if (budgetId === VULNERABLE_BUDGET_ID) {
+    return { ...project, educationSupport: { ...project.educationSupport, vulnerablePerPerson: value } };
+  }
+  return {
+    ...project,
+    otherSupports: (project.otherSupports ?? []).map(support => (support.id === budgetId ? { ...support, amount: value } : support))
+  };
 }
 
 /** 체크한 순서대로 예산을 채운다. */
@@ -118,11 +144,13 @@ export function buildProposal(project) {
     const parts = results
       .filter(result => result.budgetId === budget.id)
       .map(result => ({ ...result, total: result.perPerson * budget.count }));
+    const unusedPerPerson = Number.isFinite(budget.capPerPerson) ? budget.capPerPerson - usedPerPerson : null;
     return {
       budget,
       parts,
       usedPerPerson,
-      unusedPerPerson: Number.isFinite(budget.capPerPerson) ? budget.capPerPerson - usedPerPerson : null,
+      unusedPerPerson,
+      full: unusedPerPerson !== null && unusedPerPerson <= 0,
       total: usedPerPerson * budget.count
     };
   });
@@ -180,13 +208,18 @@ export function budgetChecklist(proposal, budgetId) {
   const budget = proposal.budgets.find(item => item.id === budgetId);
   const pool = budget.group === 'vulnerable' ? proposal.unassigned.vulnerable : proposal.unassigned.regular;
   const available = new Map(pool.map(item => [item.lineId, item.perPerson]));
+  const budgetFull = proposal.blocks.find(block => block.budget.id === budgetId)?.full ?? false;
   return proposal.lines.map(line => {
     const result = proposal.results.find(item => item.budgetId === budgetId && item.lineId === line.id) ?? null;
+    const amount = available.get(line.id) ?? 0;
     return {
       line,
       checked: Boolean(result),
       result,
-      available: available.get(line.id) ?? 0
+      available: amount,
+      // 예산이 가득 찼거나 다른 예산에 모두 넣은 항목은 더 체크할 수 없다.
+      locked: !result && (amount <= 0 || budgetFull),
+      lockReason: !result && amount <= 0 ? 'assigned' : (!result && budgetFull ? 'full' : null)
     };
   });
 }

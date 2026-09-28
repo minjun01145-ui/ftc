@@ -1,3 +1,6 @@
+import { projectCounts } from '../../engine.js';
+import { fixedCostStaffShares } from '../../fixedCosts.js';
+import { escapeHtml, formatWon, number } from '../../utils.js';
 import { renderExpenseRows } from '../expenseTable.js';
 import { renderFixedCostTable } from './fixedCostSection.js';
 
@@ -28,11 +31,36 @@ export function renderStudentExpenseSection(project) {
     </fieldset>`;
 }
 
+function staffSharesFromFixedCosts(project) {
+  const c = projectCounts(project);
+  const shares = fixedCostStaffShares(project, { participants: c.participants, dayAbsent: c.contractedAbsent, chaperones: c.chaperones });
+  if (!shares.length) return '';
+  const won = value => formatWon(Math.round(number(value)));
+  const rows = shares.map(share => `
+    <tr>
+      <td>${escapeHtml(share.label)}</td>
+      <td class="number">${share.count === null ? '-' : `${share.count}명 × ${won(share.perPerson)}`}</td>
+      <td class="number">${won(share.total)}</td>
+    </tr>`).join('');
+  const total = shares.reduce((sum, share) => sum + share.total, 0);
+  return `
+    <h3>기타비에서 넘어온 인솔자 비용 <span class="help">자동 계산 · 수정은 학생용 기타비에서</span></h3>
+    <div class="table-wrap">
+      <table class="compact-table">
+        <thead><tr><th>항목</th><th>산출</th><th>금액</th></tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr class="total"><th colspan="2">합계</th><td class="number">${won(total)}</td></tr></tfoot>
+      </table>
+    </div>
+    <h3>인솔자 체험처</h3>`;
+}
+
 export function renderStaffExpenseSection(project) {
   return `
     <fieldset class="section-fieldset expense-section" data-expense-section="staff" data-project-section="expenses">
       <legend>체험처/비용(인솔자용)</legend>
       <button type="button" class="section-save" data-action="save-staff-expenses">저장</button>
+      ${staffSharesFromFixedCosts(project)}
       <p class="help">1인당 금액은 인솔자 수 × 단가, 총액은 입력한 금액 그대로 계산합니다.</p>
       <div class="toolbar">
         <button type="button" data-action="copy-student-expenses">학생용 작성 내용 붙여넣기</button>

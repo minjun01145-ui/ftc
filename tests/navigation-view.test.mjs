@@ -9,7 +9,7 @@ const school = { name: '테스트중학교' };
 
 test('사업 하위메뉴는 전체보기 없이 예산 다음에 학생 1인별 금액 산출내역과 품의 도우미를 둔다', () => {
   assert.deepEqual(PROJECT_SECTION_ITEMS.map(item => item.label), [
-    '사업정보', '인원', '체험처/비용', '예산 관리', '학생 1인별 금액 산출내역 보기', '품의 도우미', '리포트 보기', '정산'
+    '사업정보', '인원', '체험처/비용', '예산 관리', '학생 1인별 금액 산출내역 보기', '품의 도우미(예산 배정)', '정산'
   ]);
   assert.equal(normalizeProjectSection('workflow'), PROJECT_SECTION.BUSINESS);
   assert.equal(normalizeProjectSection('overview'), PROJECT_SECTION.BUSINESS);
@@ -82,9 +82,10 @@ test('시행 전 데이터와 품의 도우미 화면을 렌더링한다', () =>
   assert.match(proposal, /<legend>예산별 품의 내용<\/legend>/);
 });
 
-test('정산 화면에는 정산 결과만 표시하고 계획 재원 배분은 표시하지 않는다', () => {
+test('정산 화면은 교육청 정산 서식 입력 도우미를 보여 준다', () => {
   const html = renderProjectPage(sampleProject(), school, PROJECT_SECTION.SETTLEMENT);
-  assert.match(html, /<h2>정산<\/h2>/);
-  assert.match(html, /<h2>정산 재원 배분<\/h2>/);
-  assert.doesNotMatch(html, /<h2>계획 재원 배분<\/h2>/);
+  assert.match(html, /교육청 정산 서식 입력 도우미/);
+  assert.match(html, /7행 한 줄 복사/);
+  assert.match(html, /지원금 집행액/);
+  assert.doesNotMatch(html, /재원 배분/);
 });

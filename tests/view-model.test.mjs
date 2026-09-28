@@ -6,12 +6,15 @@ import { cloneExpensesForStaff } from '../js/views/expenseTable.js';
 import { renderProjectPage } from '../js/views/projectView.js';
 import { newSourceRowHtml } from '../js/views/project/workflowSection.js';
 
-test('고정비 입력은 사업정보가 아니라 체험처/비용 화면에 있다', () => {
+test('기타비 입력은 사업정보가 아니라 체험처/비용 화면에 있다', () => {
   const business = renderProjectPage(sampleProject(), { name: '테스트중학교' }, PROJECT_SECTION.BUSINESS);
   const expenses = renderProjectPage(sampleProject(), { name: '테스트중학교' }, PROJECT_SECTION.EXPENSES);
-  assert.doesNotMatch(business, /fixedCost-bus-amount/);
-  assert.match(expenses, /name="fixedCost-bus-amount"/);
-  assert.match(expenses, /name="fixedCost-lodging-memo"/);
+  assert.doesNotMatch(business, /data-fixed-row/);
+  assert.match(business, /name="executionMode"/);
+  assert.match(business, /name="place"/);
+  assert.equal((expenses.match(/data-fixed-row /g) ?? []).length, 3);
+  assert.match(expenses, /data-action="add-fixed-cost"/);
+  assert.match(expenses, /1원 단위 버림/);
 });
 
 test('사업 화면의 기본 진입은 사업정보다', () => {

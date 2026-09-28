@@ -25,7 +25,7 @@ import { readProjectForm, renderProjectPage } from './views/projectView.js';
 import { newAdminRowHtml, newManualRowHtml, newSourceRowHtml, readWorkflowForm } from './views/project/workflowSection.js';
 import { gradeStudentCount, headcountIssues } from './views/project/headcountSection.js';
 import { addOtherSupportRow, moveOtherSupportRow, removeOtherSupportRow } from './views/project/budgetSection.js';
-import { syncFixedCostModeControls } from './views/project/fixedCostSection.js';
+import { addFixedCostRow, removeFixedCostRow, syncFixedCostModeControls } from './views/project/fixedCostSection.js';
 import { renderProjectList } from './views/sidebarView.js';
 import { readSchoolForm, renderSchoolPage } from './views/schoolView.js';
 
@@ -473,6 +473,10 @@ main.addEventListener('change', event => {
     proposal.toggle(target.dataset.budgetId, target.dataset.lineId, target.checked);
     return;
   }
+  if (target.matches('[data-proposal-budget-amount]')) {
+    proposal.updateBudgetAmount(target.dataset.budgetId, target.value);
+    return;
+  }
 
   dirty = true;
 
@@ -675,13 +679,36 @@ main.addEventListener('click', event => {
     return;
   }
 
+  if (action === 'copy-text') {
+    navigator.clipboard.writeText(button.dataset.copyText ?? '')
+      .then(() => showMessage('복사했습니다. 서식의 해당 칸에 붙여넣으세요.'))
+      .catch(error => showMessage(`복사하지 못했습니다: ${error.message}`));
+    return;
+  }
+
+  if (action === 'proposal-clear-budget') {
+    proposal.clearBudget(button.dataset.budgetId);
+    return;
+  }
+
+  if (action === 'add-fixed-cost') {
+    addFixedCostRow(button);
+    dirty = true;
+    return;
+  }
+
+  if (action === 'delete-fixed-cost') {
+    removeFixedCostRow(button);
+    dirty = true;
+    return;
+  }
+
   const saveActions = {
     'save-business': '사업정보를 저장했습니다.',
     'save-headcount': '인원 정보를 저장했습니다.',
     'save-budget': '예산 정보를 저장했습니다.',
     'save-student-expenses': '학생용 체험처/비용을 저장했습니다.',
-    'save-staff-expenses': '인솔자용 체험처/비용을 저장했습니다.',
-    'save-report': '리포트 메모를 저장했습니다.'
+    'save-staff-expenses': '인솔자용 체험처/비용을 저장했습니다.'
   };
 
   if (saveActions[action] && form) {

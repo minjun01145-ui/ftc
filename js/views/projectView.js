@@ -9,7 +9,6 @@ import { readFixedCostInputs } from './project/fixedCostSection.js';
 import { headcountAttendance, readHeadcountInputs, renderHeadcountSection } from './project/headcountSection.js';
 import { renderPreTripSection } from './project/preTripSection.js';
 import { renderProposalSection } from './project/proposalSection.js';
-import { renderReportSection } from './project/reportSection.js';
 import { renderSettlementSection } from './project/settlementSection.js';
 import { renderTripScheduleSection } from './project/tripScheduleSection.js';
 
@@ -20,7 +19,6 @@ const SECTION_RENDERERS = Object.freeze({
   [PROJECT_SECTION.BUDGET]: renderBudgetSection,
   [PROJECT_SECTION.PRE_TRIP]: renderPreTripSection,
   [PROJECT_SECTION.PROPOSAL]: renderProposalSection,
-  [PROJECT_SECTION.REPORT]: renderReportSection,
   [PROJECT_SECTION.SETTLEMENT]: renderSettlementSection
 });
 
@@ -66,9 +64,11 @@ export function readProjectForm(form, previous) {
   if (data.has('startDate')) next.startDate = String(data.get('startDate') ?? '');
   if (data.has('endDate')) next.endDate = String(data.get('endDate') ?? '');
   if (data.has('grade')) next.grade = data.get('grade') ? number(data.get('grade')) : '';
+  if (data.has('executionMode')) next.executionMode = String(data.get('executionMode') ?? '숙박형');
+  if (data.has('place')) next.place = String(data.get('place') ?? '').trim();
   if (data.has('totalStudents')) applyHeadcount(next, previous, data);
 
-  next.fixedCosts = readFixedCostInputs(data, previous.fixedCosts);
+  next.fixedCosts = readFixedCostInputs(form, previous.fixedCosts);
 
   const budget = readBudgetInputs(form, data, previous);
   if (budget) Object.assign(next, budget);
