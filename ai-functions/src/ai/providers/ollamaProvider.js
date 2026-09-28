@@ -1,4 +1,5 @@
 import { assertAiProvider } from '../providerContract.js';
+import { AiProviderError } from '../providerError.js';
 
 const DEFAULT_BASE_URL = 'https://ollama.com/api';
 
@@ -13,7 +14,7 @@ export function createOllamaProvider({ apiKey, baseUrl = DEFAULT_BASE_URL, fetch
   return assertAiProvider({
     id: 'ollama',
 
-    async generate({ model, messages, options = {} }) {
+    async generate({ model, messages, options = {}, format }) {
       if (!model) throw new Error('AI 모델이 설정되지 않았습니다.');
 
       const response = await fetchImpl(endpoint, {
@@ -26,6 +27,7 @@ export function createOllamaProvider({ apiKey, baseUrl = DEFAULT_BASE_URL, fetch
           model,
           messages,
           stream: false,
+          ...(format ? { format } : {}),
           options
         })
       });
@@ -33,7 +35,7 @@ export function createOllamaProvider({ apiKey, baseUrl = DEFAULT_BASE_URL, fetch
       const body = await readJson(response);
       if (!response.ok) {
         const message = body?.error || body?.message || `Ollama 요청 실패 (${response.status})`;
-        throw new Error(String(message));
+        throw new AiProviderError(String(message), { status: response.status, model });
       }
 
       return {
