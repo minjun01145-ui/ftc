@@ -120,3 +120,37 @@ test('가져오기 서비스: PDF/HWPX를 알맞은 방법으로 읽고, 못 찾
   const broken = createLocalScheduleImportService({ readPdf: async () => { throw new DocumentReadError('암호', { code: 'DOCUMENT_ENCRYPTED' }); } });
   await assert.rejects(broken.importFile(pdf), error => error.code === 'DOCUMENT_ENCRYPTED' && error.name === 'ScheduleDocumentImportError');
 });
+
+test('일자 칸이 "5/13(수)" 형식이고 문서에 연도가 없으면 기본정보 학년도로 날짜를 채운다', () => {
+  const row = (...cells) => ({ cells: cells.map(([col, text]) => ({ col, text })) });
+  const table = [
+    row([0, '일 자'], [1, '장소'], [2, '시간'], [3, '상세일정'], [4, '비고']),
+    row([0, '제1일차\n5/13(수)'], [1, '부산'], [2, '06:10~06:30'], [3, '학교 정문 앞'], [4, '음주측정']),
+    row([2, '06:30~08:30'], [3, '이동'], [4, '']),
+    row([1, '잠실\n롯데월드'], [2, '12:10~20:30'], [3, '롯데월드 체험\n(야간관람 포함)'], [4, '중식, 석식\n롯데월드\n식당 쿠폰']),
+    row([1, '숙소'], [2, '22:00'], [3, '점호 및 취침 준비'], [4, '']),
+    row([0, '제2일차\n5/14(목)'], [1, '서울'], [2, '07:00~08:30'], [3, '기상(06:00), 조식 후 숙소 출발'], [4, '조식: 숙소식']),
+    row([0, '제3일차\n5/15(금)'], [1, '서울'], [2, '12:30~13:30'], [3, '중식(덕평휴게소)'], [4, '중식: 현지식']),
+    row([2, '18:30'], [3, '부산 도착 및 해산'], [4, ''])
+  ];
+  const { items } = parseScheduleFromTables(
+    { tables: [table], paragraphs: ['2학년 수학여행 프로그램 세부 일정', '※ 세부일정은 현지 상황으로 일부 조정될 수 있음.'] },
+    { fallbackYear: 2026 }
+  );
+  assert.deepEqual(summary(items), [
+    ['2026-05-13', '06:10', '06:30', '학교 정문 앞'],
+    ['2026-05-13', '06:30', '08:30', '이동'],
+    ['2026-05-13', '12:10', '20:30', '롯데월드 체험 (야간관람 포함)'],
+    ['2026-05-13', '22:00', '', '점호 및 취침 준비'],
+    ['2026-05-14', '07:00', '08:30', '기상(06:00), 조식 후 숙소 출발'],
+    ['2026-05-15', '12:30', '13:30', '중식(덕평휴게소)'],
+    ['2026-05-15', '18:30', '', '부산 도착 및 해산']
+  ]);
+});
+
+test('빗금 날짜는 날짜처럼 생긴 것만 읽는다', () => {
+  assert.deepEqual(parseMonthDay('5/13(수)'), { month: 5, day: 13 });
+  assert.deepEqual(parseMonthDay('제2일차 5/14'), { month: 5, day: 14 });
+  assert.equal(parseMonthDay('13/40'), null);
+  assert.equal(parseMonthDay('2026/05/13'), null);
+});

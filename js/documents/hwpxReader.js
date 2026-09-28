@@ -24,8 +24,13 @@ const closestAncestor = (node, name) => {
   return null;
 };
 
+// 표는 문단 안에 들어 있으므로, 문단 글자를 모을 때 그 안에 든 표의 글자는 빼야 한다.
 function paragraphText(paragraph) {
-  return byLocalName(paragraph, 't').map(node => node.textContent).join('');
+  const ownTable = closestAncestor(paragraph, 'tbl');
+  return byLocalName(paragraph, 't')
+    .filter(node => closestAncestor(node, 'tbl') === ownTable)
+    .map(node => node.textContent)
+    .join('');
 }
 
 function cellText(cell) {

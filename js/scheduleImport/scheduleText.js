@@ -26,13 +26,20 @@ export function parseTimeRange(text) {
   return { start: times[0].value, end: '' };
 }
 
-/** '5월 13일(수)', '5월13일', '5. 13.(수)' → { month, day } */
+function validMonthDay(month, day) {
+  return month >= 1 && month <= 12 && day >= 1 && day <= 31 ? { month, day } : null;
+}
+
+/** '5월 13일(수)', '5월13일', '5. 13.(수)', '5/13(수)', '5/13' → { month, day } */
 export function parseMonthDay(text) {
   const source = String(text ?? '');
   const korean = source.match(/(\d{1,2})\s*월\s*(\d{1,2})\s*일/);
-  if (korean) return { month: Number(korean[1]), day: Number(korean[2]) };
+  if (korean) return validMonthDay(Number(korean[1]), Number(korean[2]));
   const dotted = source.match(/(?:^|[^\d.])(\d{1,2})\s*\.\s*(\d{1,2})\s*\.?\s*\(\s*[월화수목금토일]\s*\)/);
-  if (dotted) return { month: Number(dotted[1]), day: Number(dotted[2]) };
+  if (dotted) return validMonthDay(Number(dotted[1]), Number(dotted[2]));
+  // 빗금 날짜는 분수·주소 번지와 헷갈리지 않도록 앞뒤가 숫자가 아닐 때만 읽는다.
+  const slashed = source.match(/(?:^|[^\d/])(\d{1,2})\s*\/\s*(\d{1,2})(?![\d/])/);
+  if (slashed) return validMonthDay(Number(slashed[1]), Number(slashed[2]));
   return null;
 }
 
