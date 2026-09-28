@@ -1,155 +1,80 @@
 import { PROJECT_SECTION, normalizeProjectSection } from '../projectSections.js';
 import { escapeHtml, number } from '../utils.js';
+import { summarizeAttendance } from '../workflowEngine.js';
 import { readExpenseRows } from './expenseTable.js';
-import { renderBudgetSection } from './project/budgetSection.js';
+import { readBudgetInputs, renderBudgetSection } from './project/budgetSection.js';
 import { renderBusinessInfoSection } from './project/businessInfoSection.js';
 import { renderExpenseSections } from './project/expenseSections.js';
-import { renderFixedCostInputSection, readFixedCostInputs } from './project/fixedCostSection.js';
+import { readFixedCostInputs } from './project/fixedCostSection.js';
 import { headcountAttendance, readHeadcountInputs, renderHeadcountSection } from './project/headcountSection.js';
+import { renderPreTripSection } from './project/preTripSection.js';
+import { readProposalInputs, renderProposalSection } from './project/proposalSection.js';
 import { renderReportSection } from './project/reportSection.js';
 import { renderSettlementSection } from './project/settlementSection.js';
 import { renderTripScheduleSection } from './project/tripScheduleSection.js';
-import { createFundingSource } from '../presets.js';
-import { summarizeAttendance } from '../workflowEngine.js';
 
-function renderBusinessSections(project, school) {
-  return `${renderBusinessInfoSection(project, school)}${renderTripScheduleSection(project)}${renderFixedCostInputSection(project)}`;
-}
-
-function renderOverview(project, school) {
-  return `
-    ${renderBusinessSections(project, school)}
-    ${renderHeadcountSection(project, school)}
-    ${renderExpenseSections(project)}
-    ${renderBudgetSection(project)}
-    ${renderReportSection(project, { showPrint: false })}
-    ${renderSettlementSection(project, { showPrint: false })}
-    <div class="page-actions">
-      <button type="submit">전체 저장</button>
-      <button type="button" class="danger" data-action="delete-project">이 사업 삭제</button>
-    </div>`;
-}
-
-function renderSection(project, school, section) {
-  switch (section) {
-    case PROJECT_SECTION.BUSINESS:
-      return renderBusinessSections(project, school);
-    case PROJECT_SECTION.HEADCOUNT:
-      return renderHeadcountSection(project, school);
-    case PROJECT_SECTION.EXPENSES:
-      return renderExpenseSections(project);
-    case PROJECT_SECTION.BUDGET:
-      return renderBudgetSection(project);
-    case PROJECT_SECTION.REPORT:
-      return renderReportSection(project);
-    case PROJECT_SECTION.SETTLEMENT:
-      return renderSettlementSection(project);
-    case PROJECT_SECTION.OVERVIEW:
-    default:
-      return renderOverview(project, school);
-  }
-}
+const SECTION_RENDERERS = Object.freeze({
+  [PROJECT_SECTION.BUSINESS]: (project, school) => `${renderBusinessInfoSection(project, school)}${renderTripScheduleSection(project)}`,
+  [PROJECT_SECTION.HEADCOUNT]: renderHeadcountSection,
+  [PROJECT_SECTION.EXPENSES]: renderExpenseSections,
+  [PROJECT_SECTION.BUDGET]: renderBudgetSection,
+  [PROJECT_SECTION.PRE_TRIP]: renderPreTripSection,
+  [PROJECT_SECTION.PROPOSAL]: renderProposalSection,
+  [PROJECT_SECTION.REPORT]: renderReportSection,
+  [PROJECT_SECTION.SETTLEMENT]: renderSettlementSection
+});
 
 export function renderProjectPage(project, school, requestedSection = PROJECT_SECTION.BUSINESS) {
   const section = normalizeProjectSection(requestedSection);
   return `
     <h1>${escapeHtml(project.title)}</h1>
     <form id="projectForm" data-project-id="${escapeHtml(project.id)}" data-project-view="${section}">
-      ${renderSection(project, school, section)}
+      ${SECTION_RENDERERS[section](project, school)}
     </form>`;
 }
 
-function has(data, name) {
-  return data.has(name);
+function applyHeadcount(next, previous, data) {
+  const rawTotal = String(data.get('totalStudents') ?? '');
+  next.totalStudents = rawTotal === '' ? 0 : Number(rawTotal);
+  const headcount = readHeadcountInputs(data);
+  if (headcount) {
+    next.dayAbsentSharesCommonCost = headcount.dayAbsentSharesCommonCost;
+    next.workflow = {
+      ...next.workflow,
+      attendance: headcountAttendance(next.workflow?.attendance ?? {}, previous.totalStudents, headcount)
+    };
+  }
+  const summary = summarizeAttendance(next.workflow?.attendance ?? {}, next.totalStudents);
+  next.actualParticipants = summary.participants;
+  next.absentStudents = Math.max(0, summary.enrolled - summary.participants);
+  // 당일 불참자는 계약 후 불참이므로 '학생 총액' 항목과 공통비용의 수량(참여 + 당일 불참)에 들어간다.
+  next.contractedAbsentStudents = summary.vulnerableAbsent + summary.regularAbsent;
+  next.vulnerableContractedAbsent = summary.vulnerableAbsent;
+  next.regularContractedAbsent = summary.regularAbsent;
+  next.vulnerableStudents = summary.vulnerableEnrolled;
+  next.vulnerableParticipants = summary.vulnerableParticipants;
+  next.vulnerableAbsent = summary.vulnerableAbsent;
+  next.chaperones = summary.chaperones;
 }
 
+/** 현재 화면에 있는 입력칸만 읽어 사업 데이터에 반영한다. 화면에 없는 값은 그대로 둔다. */
 export function readProjectForm(form, previous) {
   const data = new FormData(form);
   const next = { ...previous };
 
-  if (has(data, 'title')) next.title = String(data.get('title') ?? '').trim();
+  if (data.has('title')) next.title = String(data.get('title') ?? '').trim();
+  if (data.has('startDate')) next.startDate = String(data.get('startDate') ?? '');
+  if (data.has('endDate')) next.endDate = String(data.get('endDate') ?? '');
+  if (data.has('grade')) next.grade = data.get('grade') ? number(data.get('grade')) : '';
+  if (data.has('totalStudents')) applyHeadcount(next, previous, data);
+
   next.fixedCosts = readFixedCostInputs(data, previous.fixedCosts);
-  if (has(data, 'startDate')) next.startDate = String(data.get('startDate') ?? '');
-  if (has(data, 'endDate')) next.endDate = String(data.get('endDate') ?? '');
-  if (has(data, 'grade')) next.grade = data.get('grade') ? number(data.get('grade')) : '';
-  if (has(data, 'executionMode')) next.executionMode = String(data.get('executionMode') ?? '숙박형');
-  if (has(data, 'place')) next.place = String(data.get('place') ?? '').trim();
-  if (has(data, 'days')) next.days = Math.max(0, number(data.get('days')));
 
-  if (has(data, 'totalStudents')) {
-    const rawTotal = String(data.get('totalStudents') ?? '');
-    next.totalStudents = rawTotal === '' ? 0 : Number(rawTotal);
-    const headcount = readHeadcountInputs(data);
-    if (headcount) {
-      next.dayAbsentSharesCommonCost = headcount.dayAbsentSharesCommonCost;
-      next.workflow = {
-        ...next.workflow,
-        attendance: headcountAttendance(next.workflow?.attendance ?? {}, previous.totalStudents, headcount)
-      };
-    }
-    const summary = summarizeAttendance(next.workflow?.attendance ?? {}, next.totalStudents);
-    next.actualParticipants = summary.participants;
-    next.absentStudents = Math.max(0, summary.enrolled - summary.participants);
-    // 당일 불참자는 계약 후 불참이므로 '학생 총액' 항목의 수량(참여 + 당일 불참)에 들어간다.
-    next.contractedAbsentStudents = summary.vulnerableAbsent + summary.regularAbsent;
-    next.vulnerableContractedAbsent = summary.vulnerableAbsent;
-    next.regularContractedAbsent = summary.regularAbsent;
-    next.vulnerableStudents = summary.vulnerableEnrolled;
-    next.vulnerableParticipants = summary.vulnerableParticipants;
-    next.vulnerableAbsent = summary.vulnerableAbsent;
-    next.chaperones = summary.chaperones;
-  }
+  const budget = readBudgetInputs(form, data, previous);
+  if (budget) Object.assign(next, budget);
 
-  if (has(data, 'regularPerPerson') || has(data, 'vulnerablePerPerson') || has(data, 'vulnerableFullSupport') || has(data, 'grantTotal')) {
-    const vulnerableMode = has(data, 'vulnerableFullSupport') ? 'full' : 'perPerson';
-    next.educationSupport = {
-      ...previous.educationSupport,
-      regularPerPerson: has(data, 'regularPerPerson')
-        ? Math.max(0, number(data.get('regularPerPerson')))
-        : previous.educationSupport.regularPerPerson,
-      vulnerableMode,
-      vulnerablePerPerson: vulnerableMode === 'full'
-        ? Math.max(0, number(previous.educationSupport.vulnerablePerPerson))
-        : has(data, 'vulnerablePerPerson')
-          ? Math.max(0, number(data.get('vulnerablePerPerson')))
-          : previous.educationSupport.vulnerablePerPerson,
-      grantTotal: has(data, 'grantTotal')
-        ? (data.get('grantTotal') === '' ? null : Math.max(0, number(data.get('grantTotal'))))
-        : previous.educationSupport.grantTotal
-    };
-    const resources = [...(next.workflow?.resources ?? [])];
-    const education = resources.find(item => item.reportClass === 'education') ?? createFundingSource({ name: '교육청 지원금', reportClass: 'education' });
-    Object.assign(education, {
-      issuedAmount: next.educationSupport.grantTotal,
-      eligibleGroups: ['vulnerable', 'regular', 'vulnerableAbsent'],
-      limits: {
-        ...education.limits,
-        vulnerable: vulnerableMode === 'full' ? null : next.educationSupport.vulnerablePerPerson,
-        regular: next.educationSupport.regularPerPerson,
-        vulnerableAbsent: vulnerableMode === 'full' ? null : next.educationSupport.vulnerablePerPerson
-      }
-    });
-    if (!resources.includes(education)) resources.push(education);
-    next.workflow = { ...next.workflow, resources };
-  }
-
-  if (has(data, 'schoolSupportAmount')) {
-    next.schoolSupport = {
-      ...previous.schoolSupport,
-      amount: Math.max(0, number(data.get('schoolSupportAmount')))
-    };
-    const resources = [...(next.workflow?.resources ?? [])];
-    const school = resources.find(item => item.reportClass === 'school') ?? createFundingSource({
-      name: '학교 자체지원금', reportClass: 'school', priority: 20, eligibleGroups: ['regular']
-    });
-    Object.assign(school, {
-      issuedAmount: next.schoolSupport.mode === 'perPersonRegular' ? null : next.schoolSupport.amount,
-      eligibleGroups: ['regular'],
-      limits: { ...school.limits, regular: next.schoolSupport.mode === 'perPersonRegular' ? next.schoolSupport.amount : null }
-    });
-    if (!resources.includes(school)) resources.push(school);
-    next.workflow = { ...next.workflow, resources };
-  }
+  const proposal = readProposalInputs(form);
+  if (proposal) next.proposalPlan = proposal;
 
   const studentTbody = form.querySelector('#studentExpenseTableBody');
   if (studentTbody) next.expenses = readExpenseRows(studentTbody, previous.expenses);
@@ -157,7 +82,7 @@ export function readProjectForm(form, previous) {
   const staffTbody = form.querySelector('#staffExpenseTableBody');
   if (staffTbody) next.staffExpenses = readExpenseRows(staffTbody, previous.staffExpenses ?? []);
 
-  if (has(data, 'memo')) next.memo = String(data.get('memo') ?? '');
+  if (data.has('memo')) next.memo = String(data.get('memo') ?? '');
 
   return next;
 }

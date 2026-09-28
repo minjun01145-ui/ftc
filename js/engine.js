@@ -1,3 +1,4 @@
+import { otherSupportsTotal } from './budget.js';
 import { fixedCostExpenses } from './fixedCosts.js';
 import { number } from './utils.js';
 
@@ -181,9 +182,15 @@ export function calculateStaffExpense(expense, project, settlement = false) {
   return { total: Math.max(0, Math.round(number(expense.unitAmount) * paidStaffCount)), paidStaffCount };
 }
 
-// 사업정보 고정비는 체험처 표와 따로 저장하지만, 비용 합계와 재원 배분에는 체험처 비용과 함께 들어간다.
+// 고정비는 체험처 표와 따로 저장하지만, 비용 합계와 재원 배분에는 체험처 비용과 함께 들어간다.
 export function studentExpenseItems(project) {
-  return [...fixedCostExpenses(project), ...(project.expenses ?? [])];
+  const counts = projectCounts(project);
+  const fixed = fixedCostExpenses(project, {
+    participants: counts.participants,
+    dayAbsent: counts.contractedAbsent,
+    chaperones: counts.chaperones
+  });
+  return [...(project.expenses ?? []), ...fixed];
 }
 
 export function calculateExpenses(project, settlement = false) {
@@ -234,11 +241,10 @@ export function allocateFunding(project, settlement = false) {
   const allocations = allocateEducation(rows, project);
   const c = projectCounts(project);
 
-  let schoolBudget = project.schoolSupport?.mode === 'perPersonRegular'
-    ? number(project.schoolSupport.amount) * c.regularParticipants
-    : number(project.schoolSupport?.amount);
+  const otherSupportBudget = otherSupportsTotal(project.otherSupports, c.regularParticipants);
+  let schoolBudget = otherSupportBudget;
 
-  // 학교 자체지원금은 교육청 지원 후 남은 비취약 참가학생 비용에 체험처 순서대로 사용한다.
+  // 기타 지원금은 교육청 지원 후 남은 비취약 참가학생 비용에 체험처 순서대로 사용한다.
   for (let i = 0; i < rows.length && schoolBudget > 0; i++) {
     const regularCost = rows[i].cohortCosts.regular;
     const remainingRegular = Math.max(0, regularCost - allocations[i].educationRegular);
@@ -271,9 +277,7 @@ export function allocateFunding(project, settlement = false) {
     schoolUsed,
     studentUsed,
     educationBalance: grantTotal === null ? null : grantTotal - educationUsed,
-    schoolBudget: project.schoolSupport?.mode === 'perPersonRegular'
-      ? number(project.schoolSupport.amount) * c.regularParticipants
-      : number(project.schoolSupport?.amount),
+    schoolBudget: otherSupportBudget,
     schoolBalance: schoolBudget,
     regularPersonalBurden: c.regularParticipants > 0 ? regularStudentUsed / c.regularParticipants : 0
   };

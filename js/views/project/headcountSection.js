@@ -12,7 +12,8 @@ export function headcountInputValues(project) {
   return {
     participants: summary.participants,
     dayAbsent: summary.vulnerableAbsent + summary.regularAbsent,
-    vulnerableParticipants: summary.vulnerableParticipants
+    vulnerableParticipants: summary.vulnerableParticipants,
+    chaperones: summary.chaperones
   };
 }
 
@@ -38,14 +39,14 @@ export function headcountIssues({ totalStudents, participants, dayAbsent = 0, vu
  * 인원 화면은 신청 단계를 따로 받지 않으므로 신청 = 실제 참여 + 당일 불참으로 둔다.
  * 당일 불참자는 취약/비취약을 나누어 받지 않으므로 비취약 불참으로 기록한다.
  */
-export function headcountAttendance(previousAttendance, previousTotal, { participants, dayAbsent, vulnerableParticipants }) {
+export function headcountAttendance(previousAttendance, previousTotal, { participants, dayAbsent, vulnerableParticipants, chaperones = null }) {
   const legacy = previousAttendance.schema === 'legacy-v5' || previousAttendance.legacyAttendance
     ? { legacyAttendance: previousAttendance.legacyAttendance ?? previousAttendance }
     : {};
   return {
     schema: 'core-v1',
     applicants: participants + dayAbsent,
-    chaperones: summarizeAttendance(previousAttendance, previousTotal).chaperones,
+    chaperones: chaperones ?? summarizeAttendance(previousAttendance, previousTotal).chaperones,
     vulnerableEnrolled: vulnerableParticipants,
     vulnerableNotApplied: 0,
     vulnerableDayAbsent: 0,
@@ -66,6 +67,7 @@ export function readHeadcountInputs(data) {
     participants: countInput(data.get('actualParticipants')),
     dayAbsent: countInput(data.get('dayAbsentStudents')),
     vulnerableParticipants: countInput(data.get('vulnerableParticipants')),
+    chaperones: data.has('chaperones') ? Math.max(0, Math.floor(countInput(data.get('chaperones')) || 0)) : null,
     dayAbsentSharesCommonCost: data.has('dayAbsentSharesCommonCost')
   };
 }
@@ -100,7 +102,12 @@ export function renderHeadcountSection(project, school = {}) {
           <input id="dayAbsentSharesCommonCost" name="dayAbsentSharesCommonCost" type="checkbox" ${project.dayAbsentSharesCommonCost ? 'checked' : ''}>
           공통비용 부담
         </label>
-        <span class="help">당일 불참자가 버스비 등 공통비용을 부담하는 경우 체크합니다.</span>
+        <span class="help">당일 불참자도 버스비·숙소비를 나눠 부담하면 체크합니다.</span>
+
+        <label for="chaperones">인솔자 수</label>
+        <input id="chaperones" name="chaperones" type="number" min="0" step="1" value="${number(values.chaperones)}">
+        <span></span>
+        <span class="help">버스비 전체 계약액은 학생과 인솔자 수로 나눕니다.</span>
       </div>
       <p class="help">해당 학년 학생수는 기본정보에서 불러오며 여기서 수정할 수 없습니다.</p>
     </fieldset>`;

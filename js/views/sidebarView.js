@@ -16,11 +16,15 @@ export function renderProjectList(projects, currentPage) {
 
     return `
       <div class="project-group">
-        <button type="button"
-          class="project-item ${activeProject ? 'active' : ''}"
-          data-project-id="${escapeHtml(project.id)}"
-          data-project-section="${PROJECT_SECTION.BUSINESS}"
-          aria-expanded="${activeProject ? 'true' : 'false'}">${escapeHtml(project.title)}</button>
+        <div class="project-row">
+          <button type="button"
+            class="project-item ${activeProject ? 'active' : ''}"
+            data-project-id="${escapeHtml(project.id)}"
+            data-project-section="${PROJECT_SECTION.BUSINESS}"
+            aria-expanded="${activeProject ? 'true' : 'false'}">${escapeHtml(project.title)}</button>
+          <button type="button" class="project-delete" data-delete-project-id="${escapeHtml(project.id)}"
+            title="${escapeHtml(project.title)} 삭제" aria-label="${escapeHtml(project.title)} 삭제">×</button>
+        </div>
         ${submenu}
       </div>`;
   }).join('');

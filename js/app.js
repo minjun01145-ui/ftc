@@ -24,6 +24,8 @@ import {
 import { readProjectForm, renderProjectPage } from './views/projectView.js';
 import { newAdminRowHtml, newManualRowHtml, newSourceRowHtml, readWorkflowForm } from './views/project/workflowSection.js';
 import { gradeStudentCount, headcountIssues } from './views/project/headcountSection.js';
+import { addOtherSupportRow, moveOtherSupportRow, removeOtherSupportRow } from './views/project/budgetSection.js';
+import { moveProposalRow } from './views/project/proposalSection.js';
 import { renderProjectList } from './views/sidebarView.js';
 import { readSchoolForm, renderSchoolPage } from './views/schoolView.js';
 
@@ -347,7 +349,32 @@ schoolNav.addEventListener('click', () => {
   goTo({ type: 'school', projectId: null, section: null });
 });
 
+function deleteProject(projectId) {
+  const project = getState().projects.find(item => item.id === projectId);
+  if (!project) return;
+  const editingThis = currentPage.type === 'project' && currentPage.projectId === projectId;
+  const warning = editingThis && dirty
+    ? `'${project.title}' 사업을 삭제할까요?\n저장하지 않은 변경사항도 함께 사라집니다.`
+    : `'${project.title}' 사업을 삭제할까요?`;
+  if (!confirm(warning)) return;
+  if (!editingThis && !canDiscardChanges()) return;
+
+  updateState(state => {
+    state.projects = state.projects.filter(item => item.id !== projectId);
+  });
+  persistState();
+  if (editingThis) currentPage = { type: 'school', projectId: null, section: null };
+  render();
+  showMessage('사업을 삭제했습니다.');
+}
+
 projectList.addEventListener('click', event => {
+  const deleteButton = event.target.closest('[data-delete-project-id]');
+  if (deleteButton) {
+    deleteProject(deleteButton.dataset.deleteProjectId);
+    return;
+  }
+
   const button = event.target.closest('[data-project-id]');
   if (!button) return;
 
@@ -433,6 +460,12 @@ main.addEventListener('change', event => {
     return;
   }
   if (target.matches('[data-school-search]')) return;
+
+  // 품의 도우미는 예산을 고르는 즉시 저장해 다시 계산한다.
+  if (target.matches('[data-proposal-assign]') && target.form) {
+    saveProject(target.form, '배정을 반영했습니다.');
+    return;
+  }
 
   dirty = true;
 
@@ -615,9 +648,31 @@ main.addEventListener('click', event => {
     return;
   }
 
+  if (action === 'add-other-support') {
+    addOtherSupportRow(button.closest('[data-budget-section]'));
+    dirty = true;
+    return;
+  }
+
+  if (action === 'delete-other-support') {
+    removeOtherSupportRow(button);
+    dirty = true;
+    return;
+  }
+
+  if (action === 'move-other-support-up' || action === 'move-other-support-down') {
+    moveOtherSupportRow(button, action === 'move-other-support-up' ? 'up' : 'down');
+    dirty = true;
+    return;
+  }
+
+  if ((action === 'move-proposal-up' || action === 'move-proposal-down') && form) {
+    if (moveProposalRow(button, action === 'move-proposal-up' ? 'up' : 'down')) saveProject(form, '품의 순서를 반영했습니다.');
+    return;
+  }
+
   const saveActions = {
     'save-business': '사업정보를 저장했습니다.',
-    'save-fixed-costs': '고정비를 저장했습니다.',
     'save-headcount': '인원 정보를 저장했습니다.',
     'save-budget': '예산 정보를 저장했습니다.',
     'save-student-expenses': '학생용 체험처/비용을 저장했습니다.',
@@ -677,21 +732,7 @@ main.addEventListener('click', event => {
     return;
   }
 
-  if (action === 'delete-project') {
-    const project = getState().projects.find(item => item.id === currentPage.projectId);
-    if (!project) return;
-    const warning = dirty
-      ? `'${project.title}' 사업을 삭제할까요?\n저장하지 않은 변경사항도 함께 사라집니다.`
-      : `'${project.title}' 사업을 삭제할까요?`;
-    if (!confirm(warning)) return;
-
-    updateState(state => {
-      state.projects = state.projects.filter(item => item.id !== currentPage.projectId);
-    });
-    persistState();
-    currentPage = { type: 'school', projectId: null, section: null };
-    render();
-  }
+  if (action === 'delete-project') deleteProject(currentPage.projectId);
 });
 
 exportBtn.addEventListener('click', () => {

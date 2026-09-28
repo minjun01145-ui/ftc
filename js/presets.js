@@ -1,4 +1,6 @@
+import { createOtherSupport, normalizeEducationMemos, normalizeOtherSupports } from './budget.js';
 import { createFixedCosts, normalizeFixedCosts } from './fixedCosts.js';
+import { createProposalPlan, normalizeProposalPlan } from './proposalPlan.js';
 import { clone, number, uid } from './utils.js';
 
 export function createExpense(overrides = {}) {
@@ -139,12 +141,11 @@ export function createProject(title = '새 사업') {
       regularPerPerson: 0,
       vulnerableMode: 'full',
       vulnerablePerPerson: 0,
-      grantTotal: null
+      grantTotal: null,
+      memos: normalizeEducationMemos()
     },
-    schoolSupport: {
-      mode: 'total',
-      amount: 0
-    },
+    otherSupports: [],
+    proposalPlan: createProposalPlan(),
     expenses: [],
     staffExpenses: [],
     workflow: createWorkflow(),
@@ -448,14 +449,11 @@ function normalizeProject(project) {
       vulnerablePerPerson: Math.max(0, number(source.educationSupport?.vulnerablePerPerson)),
       grantTotal: source.educationSupport?.grantTotal === '' || source.educationSupport?.grantTotal == null
         ? null
-        : Math.max(0, number(source.educationSupport.grantTotal))
+        : Math.max(0, number(source.educationSupport.grantTotal)),
+      memos: normalizeEducationMemos(source.educationSupport?.memos)
     },
-    schoolSupport: {
-      ...base.schoolSupport,
-      ...(source.schoolSupport ?? {}),
-      mode: source.schoolSupport?.mode === 'perPersonRegular' ? 'perPersonRegular' : 'total',
-      amount: Math.max(0, number(source.schoolSupport?.amount))
-    },
+    otherSupports: normalizeOtherSupports(source.otherSupports, source.schoolSupport),
+    proposalPlan: normalizeProposalPlan(source.proposalPlan),
     expenses: Array.isArray(source.expenses) ? source.expenses.map(normalizeExpense) : [],
     staffExpenses: Array.isArray(source.staffExpenses) ? source.staffExpenses.map(normalizeExpense) : [],
     workflow: normalizeWorkflow(source.workflow, source),
@@ -509,9 +507,10 @@ export function sampleProject() {
       regularPerPerson: 220000,
       vulnerableMode: 'full',
       vulnerablePerPerson: 0,
-      grantTotal: 20360000
+      grantTotal: 20360000,
+      memos: normalizeEducationMemos()
     },
-    schoolSupport: { mode: 'perPersonRegular', amount: 32500 },
+    otherSupports: [createOtherSupport({ name: '학교 자체지원금', mode: 'perPerson', amount: 32500 })],
     expenses: [
       createExpense({ date: '2026-05-13', name: '차량비', calcMethod: 'sharedFixed', quantityBase: 'participantsPlusAbsent', planAmount: 9000000, actualAmount: 9000000 }),
       createExpense({ date: '2026-05-13', name: '숙박비(2박)', calcMethod: 'perPerson', quantityBase: 'participantsPlusAbsent', unitAmount: 70980 }),

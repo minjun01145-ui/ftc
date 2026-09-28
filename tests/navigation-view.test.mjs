@@ -7,12 +7,18 @@ import { renderProjectList } from '../js/views/sidebarView.js';
 
 const school = { name: '테스트중학교' };
 
-test('사업 하위메뉴에는 업무 흐름이 없고 기존 일반 화면을 제공한다', () => {
+test('사업 하위메뉴는 전체보기 없이 예산 다음에 시행 전 데이터와 품의 도우미를 둔다', () => {
   assert.deepEqual(PROJECT_SECTION_ITEMS.map(item => item.label), [
-    '전체보기', '사업정보', '인원', '체험처/비용', '예산 관리', '리포트 보기', '정산'
+    '사업정보', '인원', '체험처/비용', '예산 관리', '시행 전 데이터 보기', '품의 도우미', '리포트 보기', '정산'
   ]);
   assert.equal(normalizeProjectSection('workflow'), PROJECT_SECTION.BUSINESS);
+  assert.equal(normalizeProjectSection('overview'), PROJECT_SECTION.BUSINESS);
   assert.equal(normalizeProjectSection('없는메뉴'), PROJECT_SECTION.BUSINESS);
+});
+
+test('사업 목록의 각 사업에는 삭제 버튼이 있다', () => {
+  const html = renderProjectList([sampleProject()], { type: 'school' });
+  assert.match(html, /data-delete-project-id="[^"]+"/);
 });
 
 test('선택된 사업 아래에만 하위메뉴가 렌더링된다', () => {
@@ -50,12 +56,25 @@ test('체험처 비용 화면은 학생용과 인솔자용을 함께 보여준�
   assert.doesNotMatch(html, /<legend>예산<\/legend>/);
 });
 
-test('예산 관리 화면에 계획 계산과 계획 재원 배분이 포함된다', () => {
+test('예산 관리 화면은 교육청 지원금과 기타 지원금만 보여 준다', () => {
   const html = renderProjectPage(sampleProject(), school, PROJECT_SECTION.BUDGET);
   assert.match(html, /<legend>예산<\/legend>/);
-  assert.match(html, /<h2>계획 계산<\/h2>/);
-  assert.match(html, /<h2>계획 재원 배분<\/h2>/);
-  assert.doesNotMatch(html, /<h2>정산<\/h2>/);
+  assert.match(html, /<h3>교육청 지원금<\/h3>/);
+  assert.match(html, /<h3>기타 지원금<\/h3>/);
+  assert.match(html, /교육청 지원금 교부액<small>\(잔액 정산용\)<\/small>/);
+  assert.match(html, /value="학교 자체지원금"/);
+  assert.equal((html.match(/class="budget-memo"/g) ?? []).length, 4);
+  assert.doesNotMatch(html, /계획 계산|계획 재원 배분/);
+});
+
+test('시행 전 데이터와 품의 도우미 화면을 렌더링한다', () => {
+  const preTrip = renderProjectPage(sampleProject(), school, PROJECT_SECTION.PRE_TRIP);
+  const proposal = renderProjectPage(sampleProject(), school, PROJECT_SECTION.PROPOSAL);
+  assert.match(preTrip, /학생 1인별 금액 산출 내역/);
+  assert.match(preTrip, /해당 항목 총액/);
+  assert.match(proposal, /<legend>항목 배정<\/legend>/);
+  assert.match(proposal, /<legend>예산별 품의 내용<\/legend>/);
+  assert.match(proposal, /data-proposal-assign/);
 });
 
 test('정산 화면에는 정산 결과만 표시하고 계획 재원 배분은 표시하지 않는다', () => {

@@ -2,85 +2,70 @@ import { projectCounts } from '../../engine.js';
 import {
   FIXED_COST_ITEMS,
   FIXED_COST_MODES,
-  fixedCostAmounts,
+  fixedCostBreakdown,
   normalizeFixedCosts
 } from '../../fixedCosts.js';
 import { escapeHtml, formatWon, number } from '../../utils.js';
 
 const money = value => formatWon(Math.round(number(value)));
-const modeField = key => `fixedCost-${key}-mode`;
-const amountField = key => `fixedCost-${key}-amount`;
+const fieldName = (key, field) => `fixedCost-${key}-${field}`;
 
 function modeControl(item, entry) {
   if (item.modes.length === 1) {
-    return `<span class="fixed-cost-mode">${FIXED_COST_MODES[item.modes[0]]}</span>
-      <input type="hidden" name="${modeField(item.key)}" value="${item.modes[0]}">`;
+    return `${FIXED_COST_MODES[item.modes[0]]}<input type="hidden" name="${fieldName(item.key, 'mode')}" value="${item.modes[0]}">`;
   }
   const options = item.modes
     .map(mode => `<option value="${mode}" ${mode === entry.mode ? 'selected' : ''}>${FIXED_COST_MODES[mode]}</option>`)
     .join('');
-  return `<select name="${modeField(item.key)}" aria-label="${escapeHtml(item.label)} 입력 방식">${options}</select>`;
+  return `<select name="${fieldName(item.key, 'mode')}" aria-label="${escapeHtml(item.label)} 입력 방식">${options}</select>`;
 }
 
-/** 사업정보 화면의 고정비 입력칸 */
-export function renderFixedCostInputSection(project) {
+function fixedCostRow(item, entry, counts, options) {
+  const breakdown = fixedCostBreakdown(item, entry, counts, options);
+  const entered = entry.amount > 0;
+  const divisorNote = entered && entry.mode === 'total' ? `<small>${breakdown.divisor}명으로 나눔</small>` : '';
+  return `
+    <tr>
+      <th scope="row">${escapeHtml(item.label)}</th>
+      <td>${modeControl(item, entry)}</td>
+      <td><input type="number" min="0" step="1" name="${fieldName(item.key, 'amount')}" value="${number(entry.amount)}" aria-label="${escapeHtml(item.label)} 금액"></td>
+      <td class="number">${entered ? money(breakdown.perPerson) : '-'}${divisorNote}</td>
+      <td class="number">${entered ? `${breakdown.students}명` : '-'}</td>
+      <td class="number">${entered ? money(breakdown.studentTotal) : '-'}</td>
+      <td><input type="text" name="${fieldName(item.key, 'memo')}" value="${escapeHtml(entry.memo)}" placeholder="비고" aria-label="${escapeHtml(item.label)} 비고"></td>
+    </tr>`;
+}
+
+/** 체험처/비용 화면의 고정비 입력 표. 1인당 금액과 합계는 저장한 인원 기준으로 보여 준다. */
+export function renderFixedCostTable(project) {
   const fixedCosts = normalizeFixedCosts(project.fixedCosts);
-  const rows = FIXED_COST_ITEMS.map(item => {
-    const entry = fixedCosts[item.key];
-    return `
-      <label for="${amountField(item.key)}">${escapeHtml(item.label)}</label>
-      <div class="fixed-cost-input">
-        ${modeControl(item, entry)}
-        <input id="${amountField(item.key)}" name="${amountField(item.key)}" type="number" min="0" step="1" value="${number(entry.amount)}">
-        <span>원</span>
-      </div>`;
-  }).join('');
+  const c = projectCounts(project);
+  const counts = { participants: c.participants, dayAbsent: c.contractedAbsent, chaperones: c.chaperones };
+  const options = { dayAbsentSharesCommonCost: Boolean(project.dayAbsentSharesCommonCost) };
+  const rows = FIXED_COST_ITEMS.map(item => fixedCostRow(item, fixedCosts[item.key], counts, options)).join('');
+  const absentNote = options.dayAbsentSharesCommonCost && counts.dayAbsent > 0
+    ? ` 당일 불참 ${counts.dayAbsent}명도 버스비·숙소비를 부담합니다.`
+    : '';
 
   return `
-    <fieldset class="section-fieldset" data-project-section="business" data-fixed-cost-section>
-      <legend>고정비</legend>
-      <button type="button" class="section-save" data-action="save-fixed-costs">저장</button>
-      <div class="fixed-cost-grid">${rows}</div>
-      <p class="help">전체 계약액은 실제 참여 학생 수로 나누어 1인당 금액을 계산합니다. 입력한 고정비는 체험처/비용에 자동으로 반영됩니다.</p>
-    </fieldset>`;
-}
-
-/** 폼에 고정비 입력칸이 있으면 값을 읽고, 없으면 기존 값을 그대로 돌려준다. */
-export function readFixedCostInputs(data, previousFixedCosts) {
-  if (!data.has(amountField(FIXED_COST_ITEMS[0].key))) return normalizeFixedCosts(previousFixedCosts);
-  return normalizeFixedCosts(Object.fromEntries(FIXED_COST_ITEMS.map(item => [item.key, {
-    mode: data.get(modeField(item.key)),
-    amount: data.get(amountField(item.key))
-  }])));
-}
-
-/** 체험처/비용 화면의 고정비 요약(읽기 전용) */
-export function renderFixedCostSummary(project) {
-  const fixedCosts = normalizeFixedCosts(project.fixedCosts);
-  const participants = projectCounts(project).participants;
-  const rows = FIXED_COST_ITEMS.map(item => {
-    const entry = fixedCosts[item.key];
-    if (entry.amount <= 0) {
-      return `<tr><td>${escapeHtml(item.label)}</td><td colspan="3" class="center help">미입력</td></tr>`;
-    }
-    const amounts = fixedCostAmounts(entry, participants);
-    return `
-      <tr>
-        <td>${escapeHtml(item.label)}</td>
-        <td>${FIXED_COST_MODES[entry.mode]} ${money(entry.amount)}</td>
-        <td class="number">${participants > 0 ? money(amounts.perPerson) : '-'}</td>
-        <td class="number">${money(amounts.total)}</td>
-      </tr>`;
-  }).join('');
-
-  return `
-    <div class="fixed-cost-summary">
-      <h3>고정비 <span class="help">사업정보에서 입력한 값입니다. 수정은 사업정보에서 해 주세요.</span></h3>
+    <div class="fixed-cost-block" data-fixed-cost-section>
+      <h3>고정비</h3>
+      <p class="help">전체 계약액은 인원으로 나눠 10원 미만을 버립니다. 버스비는 인솔자 ${counts.chaperones}명과 함께 나눕니다.${absentNote} 금액은 저장하면 다시 계산됩니다.</p>
       <div class="table-wrap">
-        <table class="compact-table">
-          <thead><tr><th>항목</th><th>입력값</th><th>1인당(참여 ${participants}명 기준)</th><th>학생 합계</th></tr></thead>
+        <table class="compact-table fixed-cost-table">
+          <thead><tr><th>항목</th><th>입력 방식</th><th>금액(원)</th><th>1인당</th><th>학생 수</th><th>학생 합계</th><th>비고</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
       </div>
     </div>`;
+}
+
+/** 폼에 고정비 입력칸이 있으면 값을 읽고, 없으면 기존 값을 그대로 돌려준다. */
+export function readFixedCostInputs(data, previousFixedCosts) {
+  if (!data.has(fieldName(FIXED_COST_ITEMS[0].key, 'amount'))) return normalizeFixedCosts(previousFixedCosts);
+  return normalizeFixedCosts(Object.fromEntries(FIXED_COST_ITEMS.map(item => [item.key, {
+    mode: data.get(fieldName(item.key, 'mode')),
+    amount: data.get(fieldName(item.key, 'amount')),
+    memo: String(data.get(fieldName(item.key, 'memo')) ?? '').trim()
+  }])));
 }

@@ -1,12 +1,12 @@
 import { renderExpenseRows } from '../expenseTable.js';
-import { renderFixedCostSummary } from './fixedCostSection.js';
+import { renderFixedCostTable } from './fixedCostSection.js';
 
 export function renderStudentExpenseSection(project) {
   return `
     <fieldset class="section-fieldset expense-section" data-expense-section="student" data-project-section="expenses">
       <legend>체험처/비용(학생용)</legend>
       <button type="button" class="section-save" data-action="save-student-expenses">저장</button>
-      ${renderFixedCostSummary(project)}
+      ${renderFixedCostTable(project)}
       <h3>체험처</h3>
       <p class="help">1인당 금액은 실제 참여 학생 수 × 단가, 학생 총액은 당일 불참자까지 포함한 학생 수 × 단가로 계산합니다.</p>
       <div class="toolbar">

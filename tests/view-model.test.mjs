@@ -6,16 +6,12 @@ import { cloneExpensesForStaff } from '../js/views/expenseTable.js';
 import { renderProjectPage } from '../js/views/projectView.js';
 import { newSourceRowHtml } from '../js/views/project/workflowSection.js';
 
-test('전체보기는 인원 다음 학생용, 인솔자용, 예산 순서로 표시한다', () => {
-  const html = renderProjectPage(sampleProject(), { name: '테스트중학교' }, PROJECT_SECTION.OVERVIEW);
-  const headcount = html.indexOf('<legend>인원</legend>');
-  const student = html.indexOf('<legend>체험처/비용(학생용)</legend>');
-  const staff = html.indexOf('<legend>체험처/비용(인솔자용)</legend>');
-  const budget = html.indexOf('<legend>예산</legend>');
-
-  assert.ok(headcount < student);
-  assert.ok(student < staff);
-  assert.ok(staff < budget);
+test('고정비 입력은 사업정보가 아니라 체험처/비용 화면에 있다', () => {
+  const business = renderProjectPage(sampleProject(), { name: '테스트중학교' }, PROJECT_SECTION.BUSINESS);
+  const expenses = renderProjectPage(sampleProject(), { name: '테스트중학교' }, PROJECT_SECTION.EXPENSES);
+  assert.doesNotMatch(business, /fixedCost-bus-amount/);
+  assert.match(expenses, /name="fixedCost-bus-amount"/);
+  assert.match(expenses, /name="fixedCost-lodging-memo"/);
 });
 
 test('사업 화면의 기본 진입은 사업정보다', () => {

@@ -1,17 +1,8 @@
-import { allocateFunding, calculateExpenses, projectCounts, validateProject } from '../../engine.js';
+import { allocateFunding, projectCounts, validateProject } from '../../engine.js';
 import { escapeHtml, formatWon, number } from '../../utils.js';
 
 export function money(value) {
   return formatWon(Math.round(number(value)));
-}
-
-export function vulnerableFullPerPerson(project) {
-  const counts = projectCounts(project);
-  if (counts.vulnerableParticipants <= 0) return 0;
-
-  const expenses = calculateExpenses(project, true);
-  const participantCost = expenses.rows.reduce((sum, row) => sum + row.cohortCosts.vulnerable, 0);
-  return participantCost / counts.vulnerableParticipants;
 }
 
 export function renderAllocationTable(project, settlement) {
@@ -28,7 +19,7 @@ export function renderAllocationTable(project, settlement) {
   return `
     <div class="table-wrap">
       <table>
-        <thead><tr><th>항목</th><th>학생경비</th><th>교육청 지원금</th><th>학교 자체지원금</th><th>학생부담금</th></tr></thead>
+        <thead><tr><th>항목</th><th>학생경비</th><th>교육청 지원금</th><th>기타 지원금</th><th>학생부담금</th></tr></thead>
         <tbody>${rows || '<tr><td colspan="5" class="center">비용 항목이 없습니다.</td></tr>'}</tbody>
       </table>
     </div>`;
@@ -46,8 +37,8 @@ export function renderSummaryTable(project, settlement) {
           <tr class="total"><th>${label} 공통비 포함 전체 비용</th><td>${money(allocation.expenses.total)}</td></tr>
           <tr><th>교육청 지원금 사용액</th><td>${money(allocation.educationUsed)}</td></tr>
           <tr><th>교육청 지원금 잔액</th><td>${allocation.educationBalance === null ? '교부액 미입력' : money(allocation.educationBalance)}</td></tr>
-          <tr><th>학교 자체지원금 사용액</th><td>${money(allocation.schoolUsed)}</td></tr>
-          <tr><th>학교 자체지원금 잔액</th><td>${money(allocation.schoolBalance)}</td></tr>
+          <tr><th>기타 지원금 사용액</th><td>${money(allocation.schoolUsed)}</td></tr>
+          <tr><th>기타 지원금 잔액</th><td>${money(allocation.schoolBalance)}</td></tr>
           <tr><th>학생부담금 합계</th><td>${money(allocation.studentUsed)}</td></tr>
           <tr class="total"><th>비취약 참가학생 1인당 부담액</th><td>${money(allocation.regularPersonalBurden)}</td></tr>
         </tbody>
