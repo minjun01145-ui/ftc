@@ -37,7 +37,7 @@ AI Functions 코드베이스는 `ftc1-6b064` 프로젝트의 `asia-northeast3` �
 AI Functions를 배포할 때:
 
 1. `ai-functions/.env.example`을 `.env.<프로젝트ID>`로 복사하고 provider, model, allowed origins를 설정합니다.
-2. `AI_PROVIDER_SECRETS` Secret Manager 값에 provider API key를 JSON으로 저장합니다.
+2. `AI_PROVIDER_SECRETS` Secret Manager 값에 provider API key를 `{"apiKey":"..."}` JSON 또는 키 원문으로 저장합니다.
 3. `firebase deploy --only functions:ai`를 실행합니다.
 4. 공통 Firebase Functions 기본 주소를 `aiConfig.js`의 `gatewayUrl`에 넣고 `enabled`를 켭니다. AI 키는 프런트엔드 설정에 넣지 않습니다.
 

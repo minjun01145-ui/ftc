@@ -7,6 +7,7 @@
  * @property {string} model
  * @property {Array<{role: 'system'|'user'|'assistant', content: string}>} messages
  * @property {Object=} options
+ * @property {'json'=} format
  *
  * @typedef {Object} ProviderResponse
  * @property {string} text

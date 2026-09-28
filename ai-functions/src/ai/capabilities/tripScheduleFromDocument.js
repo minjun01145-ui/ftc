@@ -48,6 +48,7 @@ export const tripScheduleFromDocument = Object.freeze({
           content: `추출 문맥(JSON): ${JSON.stringify(context)}\n문서 텍스트 시작\n${documentText}\n문서 텍스트 끝`
         }
       ],
+      format: 'json',
       options: { temperature: 0 }
     };
   },

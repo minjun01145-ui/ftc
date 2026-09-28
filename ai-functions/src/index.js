@@ -3,6 +3,7 @@ import { setGlobalOptions } from 'firebase-functions/v2';
 import { onRequest } from 'firebase-functions/v2/https';
 import {
   AI_PROVIDER_SECRETS,
+  parseProviderSecrets,
   readAiRuntimeConfig
 } from './config/aiParams.js';
 import { listCapabilities } from './ai/capabilities/registry.js';
@@ -54,7 +55,7 @@ export const aiGateway = onRequest(
         capabilityId: validation.capability,
         payload: validation.payload,
         runtimeConfig: config,
-        providerSecrets: AI_PROVIDER_SECRETS.value()
+        providerSecrets: () => parseProviderSecrets(AI_PROVIDER_SECRETS.value())
       });
       sendJson(res, outcome.status, outcome.body);
     } catch (error) {
@@ -78,8 +79,9 @@ export const aiDocumentGateway = onRequest(
     try {
       const outcome = await executeDocumentRequest(req, {
         runtimeConfig: config,
-        providerSecrets: () => AI_PROVIDER_SECRETS.value()
+        providerSecrets: () => parseProviderSecrets(AI_PROVIDER_SECRETS.value())
       });
+      if (!outcome.body?.ok) logger.warn('AI document gateway rejected', { status: outcome.status, code: outcome.body?.error?.code, message: outcome.body?.error?.message });
       sendJson(res, outcome.status, outcome.body);
     } catch (error) {
       if (error instanceof DocumentRequestError || error instanceof DocumentProcessingError) {
@@ -92,7 +94,7 @@ export const aiDocumentGateway = onRequest(
       const message = missingConfiguration
         ? '문서 일정 가져오기에 필요한 AI 서버 설정이 완료되지 않았습니다.'
         : '문서 일정 분석에 실패했습니다. 잠시 후 다시 시도해 주세요.';
-      logger.error('AI document gateway failed', { code });
+      logger.error('AI document gateway failed', { code, message: String(error?.message ?? '').slice(0, 300) });
       sendJson(res, status, { ok: false, error: { code, message } });
     }
   }

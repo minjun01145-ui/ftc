@@ -45,7 +45,7 @@ API 키는 Firebase Secret Manager에만 저장하며 프런트엔드 코드나 
 일정 문서 기능을 연결하려면 Firebase 프로젝트 ID, 활성 AI gateway URL, 모델 및 Secret Manager 설정이 필요합니다. AI Functions는 `ftc1-6b064` 프로젝트(`asia-northeast3`)에 배포되어 있고, [`aiConfig.js`](js/ai/aiConfig.js)에 해당 공통 주소가 설정되어 있습니다. `.firebaserc`와 프로젝트별 AI 환경 파일은 저장소에 두지 않습니다. Windows PowerShell 5에서는 `&&`를 쓸 수 없으므로 `cd ai-functions`, `npm ci`, `cd ..`를 따로 실행한 뒤 배포합니다.
 
 1. 실제 Firebase 프로젝트를 선택하고 `ai-functions/.env.example`을 `.env.<프로젝트ID>`로 복사합니다. `AI_PROVIDER`, `AI_DEFAULT_MODEL`, `AI_ALLOWED_ORIGINS`를 설정합니다.
-2. Ollama Cloud 키를 `firebase functions:secrets:set AI_PROVIDER_SECRETS`로 Secret Manager에 저장합니다. 값은 `{"apiKey":"..."}` JSON이며 저장소에 추가하지 않습니다.
+2. Ollama Cloud 키를 `firebase functions:secrets:set AI_PROVIDER_SECRETS`로 Secret Manager에 저장합니다. 값은 `{"apiKey":"..."}` JSON 또는 API 키 원문이며 저장소에 추가하지 않습니다. 문서 가져오기 오류 원인은 `firebase functions:log --only aiDocumentGateway`로 확인합니다.
 3. `firebase deploy --only functions:ai`로 AI 코드베이스를 배포하고 출력된 `aiDocumentGateway` 함수 URL에서 공통 Functions 기본 주소를 확인합니다.
 4. [`aiConfig.js`](js/ai/aiConfig.js)에서 `enabled: true`와 `gatewayUrl`을 설정합니다. `gatewayUrl`에는 함수 이름 경로를 제외한 공통 주소를 입력합니다. transport가 `aiHealth`, `aiGateway`, `aiDocumentGateway` 경로를 붙입니다.
 
