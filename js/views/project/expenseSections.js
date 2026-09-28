@@ -20,7 +20,7 @@ function expenseCheckList(project) {
   if (!issues.length) return '<p class="expense-checks ok-text">기초자료 점검: 확인할 항목이 없습니다.</p>';
   return `
     <div class="expense-checks">
-      <strong>기초자료 점검</strong> <span class="help">저장은 할 수 있습니다. 저장하면 다시 점검합니다.</span>
+      <strong>기초자료 점검</strong>
       <ul>${issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join('')}</ul>
     </div>`;
 }
@@ -32,7 +32,6 @@ export function renderStudentExpenseSection(project) {
       <button type="button" class="section-save" data-action="save-student-expenses">저장</button>
       ${renderFixedCostTable(project)}
       <h3>체험처</h3>
-      <p class="help">1인당 금액은 실제 참여 학생 수 × 단가, 학생 총액은 당일 불참자까지 포함한 학생 수 × 단가로 계산합니다.</p>
       <div class="toolbar">
         <button type="button" data-action="add-expense" data-expense-kind="student">항목 추가</button>
       </div>
@@ -46,7 +45,6 @@ export function renderStaffExpenseSection(project) {
     <fieldset class="section-fieldset expense-section" data-expense-section="staff" data-project-section="expenses">
       <legend>체험처/비용(인솔자용)</legend>
       <button type="button" class="section-save" data-action="save-staff-expenses">저장</button>
-      <p class="help">초안 자동 작성을 누르면 학생용 체험처와 기타비의 인솔자 몫(버스비 1인당 금액, 버림 잔액, 1인당 숙소비·보험비)을 채웁니다. 초안을 보고 고친 뒤 저장하세요. 1인당 금액은 인솔자 수 × 단가, 총액은 입력한 금액 그대로 계산합니다.</p>
       <div class="toolbar">
         <button type="button" data-action="draft-staff-expenses">초안 자동 작성</button>
         <button type="button" data-action="add-expense" data-expense-kind="staff">항목 추가</button>

@@ -43,7 +43,7 @@ function progressBox(proposal) {
   }
   const chips = regular.map(item => `<span class="chip">${escapeHtml(lineLabel(item))} ${won(item.perPerson)}원</span>`).join('');
   const vulnerableNote = vulnerable.length && proposal.counts.vulnerable > 0
-    ? `<p class="help">취약계층에게 배정하지 않은 1인당 ${won(proposal.vulnerableBurden.perPerson)}원은 수익자 부담으로 처리됩니다.</p>`
+    ? `<p>취약계층 미배정 1인당 ${won(proposal.vulnerableBurden.perPerson)}원 → 수익자 부담</p>`
     : '';
   return `
     <div class="proposal-progress warn">
@@ -57,8 +57,8 @@ function progressBox(proposal) {
 
 function settingEditor(budget) {
   const { setting } = budget;
-  if (!setting) return '<p class="budget-setting">한도 없음 · 다른 예산에서 남은 금액을 넣습니다</p>';
-  if (setting.mode === 'full') return '<p class="budget-setting">실비 전액 지원(한도 없음) <small>예산 관리에서 바꿀 수 있습니다</small></p>';
+  if (!setting) return '<p class="budget-setting">한도 없음</p>';
+  if (setting.mode === 'full') return '<p class="budget-setting">실비 전액 지원</p>';
   const label = setting.mode === 'total' ? '총액' : '1인당';
   const perPerson = setting.mode === 'total' && Number.isFinite(budget.capPerPerson)
     ? ` <small>= 1인당 ${won(budget.capPerPerson)}원</small>` : '';
@@ -89,11 +89,11 @@ function checklistItem(budgetId, { line, checked, result, available, locked, loc
   let note = '';
   if (checked && result.perPerson <= 0) {
     amount = '0원';
-    note = '<span class="warn-text">예산이 가득 차서 넣지 못했습니다. 체크를 빼 주세요.</span>';
+    note = '<span class="warn-text">예산이 가득 차서 넣지 못함</span>';
   } else if (checked) {
     amount = `${won(result.perPerson)}원`;
     if (result.overBudget) {
-      note = `<span class="warn-text">예산 초과: ${won(result.requested)}원 중 ${won(result.perPerson)}원만 넣었습니다. 남은 ${won(result.left)}원은 다른 예산에서 체크하세요.</span>`;
+      note = `<span class="warn-text">예산 초과: ${won(result.requested)}원 중 ${won(result.perPerson)}원만 넣음, ${won(result.left)}원 남음</span>`;
     }
   } else if (lockReason === 'assigned') {
     amount = '다른 예산에 배정 완료';
@@ -119,10 +119,10 @@ function budgetCard(proposal, block) {
   const canFill = items.some(item => !item.checked && !item.locked);
   const canClear = items.some(item => item.checked);
   const fullNote = block.full && items.some(item => item.lockReason === 'full')
-    ? '<p class="budget-full-note">예산이 가득 찼습니다. 다른 항목을 넣으려면 체크를 빼거나 지원 금액을 늘리세요.</p>'
+    ? '<p class="budget-full-note">예산이 가득 찼습니다.</p>'
     : '';
   const dayAbsentNote = budget.id === EDUCATION_BUDGET_ID && proposal.dayAbsentTotal > 0
-    ? `<p class="help">당일 불참 ${proposal.counts.dayAbsent}명의 ${proposal.dayAbsent.map(item => item.name).join('·')} ${won(proposal.dayAbsentTotal)}원도 이 예산에서 자동으로 품의합니다.</p>`
+    ? `<p class="budget-card-extra">+ 당일 불참 ${proposal.counts.dayAbsent}명 ${proposal.dayAbsent.map(item => item.name).join('·')} ${won(proposal.dayAbsentTotal)}원</p>`
     : '';
   return `
     <section class="budget-card ${budget.group} ${block.full ? 'is-full' : ''}">
@@ -251,9 +251,8 @@ export function proposalGuide(proposal) {
 
 function guideHtml(proposal) {
   const { steps, notes } = proposalGuide(proposal);
-  if (!steps.length) return '<p class="help">예산 카드에 항목을 체크하면 품의 방법을 정리해 드립니다.</p>';
+  if (!steps.length) return '';
   return `
-    <p>아래 예산별로 품의를 올리면 됩니다. 각 예산에 들어갈 항목과 금액은 표에 정리되어 있습니다.</p>
     <ol class="proposal-steps">${steps.map(step => `<li>${escapeHtml(step)}</li>`).join('')}</ol>
     ${notes.length ? `<ul class="proposal-notes">${notes.map(note => `<li>${escapeHtml(note)}</li>`).join('')}</ul>` : ''}`;
 }

@@ -102,13 +102,10 @@ export function renderHeadcountSection(project, school = {}) {
           <input id="dayAbsentSharesCommonCost" name="dayAbsentSharesCommonCost" type="checkbox" ${project.dayAbsentSharesCommonCost ? 'checked' : ''}>
           공통비용 부담
         </label>
-        <span class="help">당일 불참자도 버스비·숙소비를 나눠 부담하면 체크합니다.</span>
+        <span></span>
 
         <label for="chaperones">인솔자 수</label>
         <input id="chaperones" name="chaperones" type="number" min="0" step="1" value="${number(values.chaperones)}">
-        <span></span>
-        <span class="help">버스비 전체 계약액은 학생과 인솔자 수로 나눕니다.</span>
       </div>
-      <p class="help">해당 학년 학생수는 기본정보에서 불러오며 여기서 수정할 수 없습니다.</p>
     </fieldset>`;
 }

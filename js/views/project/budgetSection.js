@@ -85,7 +85,6 @@ export function renderBudgetSection(project) {
           <h3>기타 지원금</h3>
           <button type="button" data-action="add-other-support">지원금 추가</button>
         </div>
-        <p class="help">학교 자체지원금, 문화예술체험활동비, 지자체 지원금 등을 추가합니다. 구분은 정산 서식의 학교부담(학교)과 외부지원(외부) 칸을 나눌 때 씁니다. 비취약계층 참여 학생 ${regularParticipants}명 기준이며, 총액은 인원으로 나눠 1인당 금액을 계산합니다. 어떤 항목에 쓸지는 품의 도우미에서 정합니다.</p>
         <div class="table-wrap">
           <table class="compact-table other-support-table">
             <thead><tr><th>순서</th><th>지원금 이름</th><th>구분</th><th>방식</th><th>금액(원)</th><th>1인당</th><th>메모</th><th>삭제</th></tr></thead>

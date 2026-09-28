@@ -24,7 +24,6 @@ export function renderSettlementSection(project, school = {}) {
 
   return `
     <section class="settlement-helper" data-project-section="settlement">
-      <p class="help">교육청 「현장체험학습비 지원금 정산」 서식을 작성할 때 참고할 값입니다. 체험학습을 마친 뒤 인원·비용·예산 배정을 실제대로 고친 다음 확인하세요.</p>
       ${basics ? `<p class="settlement-basics">${escapeHtml(basics)}</p>` : ''}
       ${warnings.length ? `<ul class="settlement-warnings">${warnings.map(warning => `<li>${escapeHtml(warning)}</li>`).join('')}</ul>` : ''}
 
@@ -36,8 +35,8 @@ export function renderSettlementSection(project, school = {}) {
           ${item('참여인원 계', people(values.participants), { strong: true })}
         `)}
         ${card('1인당 비용', `
-          ${item('1인당 현장체험학습비', won(values.perPerson), { strong: true, note: '교육청 지원 상한액이 아닌 실제 1인당 단가' })}
-          ${values.dayAbsentCommonCost > 0 ? item('당일 불참자 공통경비', won(values.dayAbsentCommonCost), { note: `당일 불참 ${values.dayAbsentCount}명의 버스비·숙소비 등` }) : ''}
+          ${item('1인당 현장체험학습비', won(values.perPerson), { strong: true })}
+          ${values.dayAbsentCommonCost > 0 ? item('당일 불참자 공통경비', won(values.dayAbsentCommonCost)) : ''}
         `)}
         ${card('교육청 지원금', `
           ${item('교부액', won(values.grantTotal))}
@@ -48,7 +47,7 @@ export function renderSettlementSection(project, school = {}) {
           ${item('학교부담', won(values.schoolBurden))}
           ${item('학생부담', won(values.studentBurden))}
           ${item('외부지원', won(values.externalSupport))}
-          ${item('소계', won(values.burdenSubtotal), { strong: true, note: '총액 기준, 교직원 인솔비 제외' })}
+          ${item('소계', won(values.burdenSubtotal), { strong: true })}
         `)}
       </div>
 

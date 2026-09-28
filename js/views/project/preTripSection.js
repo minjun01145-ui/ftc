@@ -52,7 +52,7 @@ export function renderPreTripSection(project) {
   return `
     <section class="pre-trip-sheet" data-project-section="preTrip">
       <h2>학생 1인별 금액 산출 내역</h2>
-      <p class="help">실제 참여 ${counts.participants}명 · 당일 불참 ${counts.contractedAbsent}명 · 인솔자 ${counts.chaperones}명 기준입니다. 금액이 없는 일정은 표시하지 않습니다.</p>
+      <p>참여 ${counts.participants}명 · 당일 불참 ${counts.contractedAbsent}명 · 인솔자 ${counts.chaperones}명</p>
       <div class="table-wrap">
         <table class="compact-table sheet-table">
           <thead><tr><th>항목</th><th>내용</th><th>금액(원)</th><th>학생 수</th><th>해당 항목 총액</th><th>비고</th></tr></thead>

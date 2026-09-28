@@ -56,7 +56,7 @@ function staffShareRows(project) {
     .map(share => `
       <tr class="auto-row">
         <th scope="row">${escapeHtml(share.label)}</th>
-        <td colspan="3" class="help">자동 계산 · 인솔자 비용으로 처리합니다</td>
+        <td colspan="3">인솔자 비용</td>
         <td class="number">${money(share.total)}</td>
         <td colspan="2"></td>
       </tr>`).join('');
@@ -76,7 +76,6 @@ export function renderFixedCostTable(project) {
         <h3>기타비</h3>
         <button type="button" class="small-button" data-action="add-fixed-cost">기타비 항목 추가</button>
       </div>
-      <p class="help">전체 계약액은 인원으로 나눠 1인당 금액을 만듭니다. '인솔자도 함께 부담'은 학생 + 인솔자(${counts.chaperones}명) 수로 나누고, '1원 단위 버림'은 1인당 금액을 10원 단위로 맞춥니다. 나누고 남은 금액(버림 잔액)은 아래에 자동으로 표시되고 인솔자 비용으로 처리됩니다.</p>
       <div class="table-wrap">
         <table class="compact-table fixed-cost-table">
           <thead><tr><th>항목</th><th>입력 방식</th><th>금액(원)</th><th>학생 1인당</th><th>학생 합계</th><th>내용</th><th>삭제</th></tr></thead>
