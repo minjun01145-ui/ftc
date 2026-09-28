@@ -42,7 +42,7 @@ API 키는 Firebase Secret Manager에만 저장하며 프런트엔드 코드나 
 
 사업정보의 일정에서 PDF 또는 HWPX 파일 한 개를 선택하면 문서 텍스트를 추출하고 일정 초안을 만듭니다. 날짜와 일정 항목을 확인·수정한 뒤 `저장`을 눌러야 일정과 연결 비용에 반영됩니다. 스캔 PDF의 OCR과 `.hwp`는 지원하지 않습니다. 문서 본문은 서버 메모리에서 처리하며 브라우저 저장 데이터나 Firebase Storage에 저장하지 않습니다.
 
-일정 문서 기능을 연결하려면 Firebase 프로젝트 ID, 활성 AI gateway URL, 모델 및 Secret Manager 설정이 필요합니다. 현재 checkout에는 `.firebaserc`와 프로젝트별 AI 환경 파일이 없고 `js/ai/aiConfig.js`의 주소가 비어 있으며 기능이 비활성화되어 있습니다. 2026-09-27에 기존 설정에 적힌 `ftc1-6b064` 프로젝트를 조회했을 때 배포된 함수는 `schoolInfoGateway`뿐이었습니다. AI Functions 배포는 아직 확인되지 않았고, 미설정 상태에서 가져오기를 시도하면 `AI_NOT_CONFIGURED`가 표시됩니다.
+일정 문서 기능을 연결하려면 Firebase 프로젝트 ID, 활성 AI gateway URL, 모델 및 Secret Manager 설정이 필요합니다. AI Functions는 `ftc1-6b064` 프로젝트(`asia-northeast3`)에 배포되어 있고, [`aiConfig.js`](js/ai/aiConfig.js)에 해당 공통 주소가 설정되어 있습니다. `.firebaserc`와 프로젝트별 AI 환경 파일은 저장소에 두지 않습니다. Windows PowerShell 5에서는 `&&`를 쓸 수 없으므로 `cd ai-functions`, `npm ci`, `cd ..`를 따로 실행한 뒤 배포합니다.
 
 1. 실제 Firebase 프로젝트를 선택하고 `ai-functions/.env.example`을 `.env.<프로젝트ID>`로 복사합니다. `AI_PROVIDER`, `AI_DEFAULT_MODEL`, `AI_ALLOWED_ORIGINS`를 설정합니다.
 2. Ollama Cloud 키를 `firebase functions:secrets:set AI_PROVIDER_SECRETS`로 Secret Manager에 저장합니다. 값은 `{"apiKey":"..."}` JSON이며 저장소에 추가하지 않습니다.

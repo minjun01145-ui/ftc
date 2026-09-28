@@ -32,7 +32,7 @@ PDF/HWPX 현장체험학습 일정 가져오기는 별도 Firebase Functions 코
 
 ## 현재 연결 설정
 
-저장소에는 `.firebaserc`와 프로젝트별 AI 환경 파일이 없고 `js/ai/aiConfig.js`는 `enabled: false`, 빈 `gatewayUrl` 상태입니다. 2026-09-27에 기존 설정에 적힌 `ftc1-6b064` 프로젝트를 조회한 결과 `schoolInfoGateway`만 배포되어 있었습니다. 브라우저는 현재 `AI_NOT_CONFIGURED` 상태를 표시하며, 모델과 Secret Manager 설정 및 AI 배포를 마친 뒤에만 URL과 활성화 값을 넣습니다.
+AI Functions 코드베이스는 `ftc1-6b064` 프로젝트의 `asia-northeast3` 리전에 배포되어 있습니다. `js/ai/aiConfig.js`는 `enabled: true`, `gatewayUrl: 'https://asia-northeast3-ftc1-6b064.cloudfunctions.net'`로 설정되어 있습니다. `.firebaserc`와 프로젝트별 AI 환경 파일(`ai-functions/.env.<프로젝트ID>`)은 저장소에 두지 않습니다.
 
 AI Functions를 배포할 때:
 
