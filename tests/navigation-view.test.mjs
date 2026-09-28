@@ -82,10 +82,11 @@ test('시행 전 데이터와 품의 도우미 화면을 렌더링한다', () =>
   assert.match(proposal, /<legend>예산별 품의 내용<\/legend>/);
 });
 
-test('정산 화면은 교육청 정산 서식 입력 도우미를 보여 준다', () => {
+test('정산 화면은 정산 서식 작성에 참고할 값만 간단히 보여 준다', () => {
   const html = renderProjectPage(sampleProject(), school, PROJECT_SECTION.SETTLEMENT);
-  assert.match(html, /교육청 정산 서식 입력 도우미/);
-  assert.match(html, /7행 한 줄 복사/);
-  assert.match(html, /지원금 집행액/);
+  for (const label of ['해당학년 총 학생수', '1인당 현장체험학습비', '교부액', '집행액', '잔액(원단위 절사)', '학교부담', '학생부담', '비고 참고 문구']) {
+    assert.ok(html.includes(label), `missing ${label}`);
+  }
+  assert.doesNotMatch(html, /7행 한 줄 복사/);
   assert.doesNotMatch(html, /재원 배분/);
 });

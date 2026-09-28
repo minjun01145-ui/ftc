@@ -1,10 +1,11 @@
 import { createExpense } from '../presets.js';
 import { applyCostMethod, costInputAmount, costMethodOf, costMethodOptions } from '../costMethods.js';
 import { escapeHtml, number } from '../utils.js';
+import { dayToneClass, dayToneMap } from './dayTone.js';
 
 /**
  * 체험처/비용 표(학생용·인솔자용 공통): 순서 | 일자 | 체험처/항목 | 계산방법 | 단가 | 삭제
- * 인솔자용 표는 학생용과 모양이 같아서 '학생용 작성 내용 붙여넣기'가 그대로 복사된다.
+ * 인솔자용 표는 학생용과 모양이 같아서 초안 자동 작성 결과를 그대로 보여 줄 수 있다.
  */
 const COLUMN_COUNT = 6;
 const EMPTY_TEXT = '등록된 체험처/비용 항목이 없습니다.';
@@ -17,9 +18,9 @@ function methodSelect(kind, expense) {
   return `<select data-field="costMethod" aria-label="계산방법">${options}</select>`;
 }
 
-export function expenseRowHtml(expense, kind = 'student') {
+export function expenseRowHtml(expense, kind = 'student', toneClass = '') {
   return `
-    <tr data-expense-row data-expense-kind="${kind}" data-expense-id="${escapeHtml(expense.id)}">
+    <tr data-expense-row data-expense-kind="${kind}" data-expense-id="${escapeHtml(expense.id)}" class="${toneClass}">
       <td class="center">
         <button type="button" class="small-button" data-action="move-expense-up">↑</button>
         <button type="button" class="small-button" data-action="move-expense-down">↓</button>
@@ -36,9 +37,11 @@ function emptyRowHtml() {
   return `<tr data-empty-row><td colspan="${COLUMN_COUNT}" class="center">${EMPTY_TEXT}</td></tr>`;
 }
 
+// 같은 날짜의 행은 같은 색으로 칠해 일자별로 알아보기 쉽게 한다(저장하면 다시 칠한다).
 export function renderExpenseRows(expenses, kind = 'student') {
   if (!expenses.length) return emptyRowHtml();
-  return expenses.map(expense => expenseRowHtml(expense, kind)).join('');
+  const tones = dayToneMap(expenses.map(expense => expense.date));
+  return expenses.map(expense => expenseRowHtml(expense, kind, dayToneClass(tones, expense.date))).join('');
 }
 
 function mainRows(tbody) {
@@ -76,16 +79,6 @@ export function moveExpenseRow(tbody, id, direction) {
   if (direction === 'up') target.before(rows[index]);
   else target.after(rows[index]);
   updateExpenseRowButtons(tbody);
-}
-
-/** 학생용 항목을 인솔자용으로 복사한다. 새 ID를 쓰고, 계산방법은 인솔자용 선택지에 맞춘다. */
-export function cloneExpensesForStaff(expenses) {
-  return expenses.map(expense => {
-    const { id: _id, ...copy } = expense;
-    const cloned = createExpense({ ...copy, details: { ...(expense.details ?? {}) } });
-    const amount = costInputAmount('student', expense);
-    return expense.calcMethod === 'perPerson' ? applyCostMethod('staff', cloned, 'perStaff', amount) : cloned;
-  });
 }
 
 export function replaceExpenseRows(tbody, expenses, kind = 'student') {

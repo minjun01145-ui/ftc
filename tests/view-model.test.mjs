@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { sampleProject } from '../js/presets.js';
 import { PROJECT_SECTION } from '../js/projectSections.js';
-import { cloneExpensesForStaff } from '../js/views/expenseTable.js';
+import { cloneExpensesForStaff } from '../js/staffDraft.js';
 import { renderProjectPage } from '../js/views/projectView.js';
 import { newSourceRowHtml } from '../js/views/project/workflowSection.js';
 

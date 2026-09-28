@@ -1,59 +1,62 @@
-import { SETTLEMENT_COLUMNS, buildSettlementReport, settlementRowTsv } from '../../settlementReport.js';
-import { escapeHtml } from '../../utils.js';
+import { buildSettlementReport } from '../../settlementReport.js';
+import { escapeHtml, number } from '../../utils.js';
 
-function displayValue(value) {
-  if (typeof value === 'number') return value.toLocaleString('ko-KR');
-  return String(value ?? '');
-}
+const won = value => (value === '' || value === null || value === undefined ? '미입력' : `${Math.round(number(value)).toLocaleString('ko-KR')}원`);
+const people = value => `${number(value).toLocaleString('ko-KR')}명`;
 
-function copyButton(text, label = '복사') {
-  if (text === '' || text === null || text === undefined) return '';
-  return `<button type="button" class="small-button" data-action="copy-text" data-copy-text="${escapeHtml(String(text))}">${label}</button>`;
-}
-
-function valueRow(column, values) {
-  const value = values[column.key];
-  const hints = [];
-  if (column.merged) hints.push(`${column.merged} 병합 칸`);
-  if (column.formula) hints.push('서식에 수식이 있어 자동 계산됩니다');
-  if (column.hint) hints.push(column.hint);
-  const empty = value === '' || value === null || value === undefined;
+function item(label, value, { strong = false, note = '' } = {}) {
   return `
-    <tr class="${column.formula ? 'formula-row' : ''}">
-      <th scope="row" class="center">${column.col}</th>
-      <td>${escapeHtml(column.label)}</td>
-      <td class="settlement-value ${typeof value === 'number' ? 'number' : ''}">${empty ? '<span class="warn-text">미입력</span>' : escapeHtml(displayValue(value))}</td>
-      <td class="center">${column.formula ? '' : copyButton(value)}</td>
-      <td class="help">${escapeHtml(hints.join(' · '))}</td>
-    </tr>`;
+    <div class="ref-item ${strong ? 'strong' : ''}">
+      <span class="ref-label">${escapeHtml(label)}</span>
+      <span class="ref-value">${escapeHtml(value)}</span>
+      ${note ? `<span class="ref-note">${escapeHtml(note)}</span>` : ''}
+    </div>`;
+}
+
+function card(title, body) {
+  return `<section class="ref-card"><h3>${escapeHtml(title)}</h3>${body}</section>`;
 }
 
 export function renderSettlementSection(project, school = {}) {
   const { values, warnings } = buildSettlementReport(project, school);
-  const rows = SETTLEMENT_COLUMNS.filter(column => column.key !== 'remarks').map(column => valueRow(column, values)).join('');
-  const warningHtml = warnings.length
-    ? `<ul class="settlement-warnings">${warnings.map(warning => `<li>${escapeHtml(warning)}</li>`).join('')}</ul>`
-    : '<p class="ok-text">입력에 필요한 값이 모두 준비되었습니다.</p>';
+  const basics = [values.schoolName, values.grade === '' ? '' : `${values.grade}학년`, values.executionMode, values.period && `${values.period}(${values.days}일)`, values.place]
+    .filter(Boolean).join(' · ');
 
   return `
     <section class="settlement-helper" data-project-section="settlement">
-      <div class="proposal-howto">
-        <strong>교육청 정산 서식 입력 도우미</strong>
-        <p>「2026학년도 (초6·중2·고2) 현장체험학습비 지원금 정산」 서식 7행에 넣을 값입니다. 체험학습을 마친 뒤 인원·비용·예산 배정을 실제대로 고친 다음 확인하세요.</p>
-        <p>값 옆의 <b>복사</b>를 눌러 해당 칸에 붙여넣거나, <b>7행 한 줄 복사</b> 후 B7 칸을 선택하고 붙여넣으세요. 병합 칸 때문에 한 줄 붙여넣기가 안 되면 칸별로 복사하세요.</p>
+      <p class="help">교육청 「현장체험학습비 지원금 정산」 서식을 작성할 때 참고할 값입니다. 체험학습을 마친 뒤 인원·비용·예산 배정을 실제대로 고친 다음 확인하세요.</p>
+      ${basics ? `<p class="settlement-basics">${escapeHtml(basics)}</p>` : ''}
+      ${warnings.length ? `<ul class="settlement-warnings">${warnings.map(warning => `<li>${escapeHtml(warning)}</li>`).join('')}</ul>` : ''}
+
+      <div class="ref-cards">
+        ${card('인원', `
+          ${item('해당학년 총 학생수', people(values.totalStudents))}
+          ${item('참여인원(취약계층 제외)', people(values.regularParticipants))}
+          ${item('취약계층 참여인원', people(values.vulnerableParticipants))}
+          ${item('참여인원 계', people(values.participants), { strong: true })}
+        `)}
+        ${card('1인당 비용', `
+          ${item('1인당 현장체험학습비', won(values.perPerson), { strong: true, note: '교육청 지원 상한액이 아닌 실제 1인당 단가' })}
+          ${values.dayAbsentCommonCost > 0 ? item('당일 불참자 공통경비', won(values.dayAbsentCommonCost), { note: `당일 불참 ${values.dayAbsentCount}명의 버스비·숙소비 등` }) : ''}
+        `)}
+        ${card('교육청 지원금', `
+          ${item('교부액', won(values.grantTotal))}
+          ${item('집행액', won(values.executed), { strong: true })}
+          ${item('잔액(원단위 절사)', won(values.balance))}
+        `)}
+        ${card('지원금 외 부담액', `
+          ${item('학교부담', won(values.schoolBurden))}
+          ${item('학생부담', won(values.studentBurden))}
+          ${item('외부지원', won(values.externalSupport))}
+          ${item('소계', won(values.burdenSubtotal), { strong: true, note: '총액 기준, 교직원 인솔비 제외' })}
+        `)}
       </div>
-      ${warningHtml}
-      <div class="toolbar no-print">${copyButton(settlementRowTsv(values), '7행 한 줄 복사(B7부터)')}</div>
-      <div class="table-wrap">
-        <table class="compact-table settlement-table">
-          <thead><tr><th>열</th><th>항목</th><th>입력할 값</th><th>복사</th><th>안내</th></tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
-      <h3>X열 비고</h3>
-      <p class="help">학교·외부 지원 내역과 당일 불참자 공통경비를 서식 예시와 같은 모양으로 만들었습니다.</p>
-      <pre class="settlement-remarks">${escapeHtml(values.remarks || '(비고에 적을 내용이 없습니다)')}</pre>
-      <div class="toolbar no-print">${copyButton(values.remarks, '비고 복사')}</div>
+
+      <section class="ref-card">
+        <h3>비고 참고 문구</h3>
+        <pre class="settlement-remarks">${escapeHtml(values.remarks || '(비고에 적을 내용이 없습니다)')}</pre>
+        ${values.remarks ? `<button type="button" class="small-button no-print" data-action="copy-text" data-copy-text="${escapeHtml(values.remarks)}">비고 복사</button>` : ''}
+      </section>
       <div class="page-actions no-print"><button type="button" data-action="print">인쇄</button></div>
     </section>`;
 }

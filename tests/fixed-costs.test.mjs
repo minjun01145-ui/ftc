@@ -10,7 +10,7 @@ import {
   normalizeFixedCosts
 } from '../js/fixedCosts.js';
 import { createExpense, createProject, normalizeState } from '../js/presets.js';
-import { cloneExpensesForStaff } from '../js/views/expenseTable.js';
+import { cloneExpensesForStaff } from '../js/staffDraft.js';
 
 const counts = { participants: 70, dayAbsent: 1, chaperones: 8 };
 const entryOf = (fixedCosts, id) => normalizeFixedCosts(fixedCosts).find(entry => entry.id === id);

@@ -1,10 +1,11 @@
 import { TRIP_SCHEDULE_FILE_ACCEPT } from '../../services/scheduleUpload.js';
 import { createTripScheduleItem } from '../../presets.js';
 import { escapeHtml } from '../../utils.js';
+import { dayHeading, dayToneClass, dayToneMap } from '../dayTone.js';
 
-function scheduleRowHtml(item) {
+function scheduleRowHtml(item, tones = new Map()) {
   return `
-    <tr data-trip-schedule-row data-schedule-item-id="${escapeHtml(item.id)}">
+    <tr data-trip-schedule-row data-schedule-item-id="${escapeHtml(item.id)}" class="${dayToneClass(tones, item.date)}">
       <td><input type="date" data-schedule-field="date" value="${escapeHtml(item.date)}" readonly></td>
       <td><input type="text" data-schedule-field="name" value="${escapeHtml(item.name)}" readonly></td>
       <td><input type="time" data-schedule-field="arrivalTime" value="${escapeHtml(item.arrivalTime)}" readonly></td>
@@ -15,7 +16,7 @@ function scheduleRowHtml(item) {
           <button type="button" class="small-button" data-action="search-schedule-place" hidden>검색</button>
         </div>
       </td>
-      <td><input type="text" data-schedule-field="contact" value="${escapeHtml(item.contact)}" readonly></td>
+      <td><input type="text" data-schedule-field="contact" value="${escapeHtml(item.contact)}" placeholder="연락처 등" readonly></td>
     </tr>`;
 }
 
@@ -23,7 +24,46 @@ function scheduleRowsHtml(items) {
   if (!items.length) {
     return '<tr data-trip-schedule-empty><td colspan="6" class="center">일정이 없습니다.</td></tr>';
   }
-  return items.map(scheduleRowHtml).join('');
+  const tones = dayToneMap(items.map(item => item.date));
+  return items.map(item => scheduleRowHtml(item, tones)).join('');
+}
+
+function timeText(item) {
+  if (item.arrivalTime && item.departureTime) return `${item.arrivalTime} ~ ${item.departureTime}`;
+  if (item.arrivalTime) return `${item.arrivalTime} 도착`;
+  if (item.departureTime) return `${item.departureTime} 출발`;
+  return '';
+}
+
+/** 저장된 일정을 날짜별로 묶어 읽기 좋게 보여 주는 표(수정하지 않을 때). */
+function scheduleViewHtml(items) {
+  if (!items.length) return '<p class="schedule-empty">아직 일정이 없습니다. 일정 문서를 불러오거나 일정 항목을 추가하세요.</p>';
+  const tones = dayToneMap(items.map(item => item.date));
+  const groups = [];
+  for (const item of items) {
+    const key = String(item.date ?? '');
+    const last = groups.at(-1);
+    if (last && last.date === key) last.items.push(item);
+    else groups.push({ date: key, items: [item] });
+  }
+  const bodies = groups.map(group => `
+    <tbody class="schedule-day ${dayToneClass(tones, group.date)}">
+      <tr class="schedule-day-head"><th colspan="4">${escapeHtml(dayHeading(tones, group.date))}</th></tr>
+      ${group.items.map(item => `
+        <tr>
+          <td class="schedule-time">${escapeHtml(timeText(item))}</td>
+          <td class="schedule-name">${escapeHtml(item.name)}</td>
+          <td>${escapeHtml(item.address)}</td>
+          <td>${escapeHtml(item.contact)}</td>
+        </tr>`).join('')}
+    </tbody>`).join('');
+  return `
+    <div class="table-wrap">
+      <table class="compact-table schedule-view-table">
+        <thead><tr><th>시간</th><th>일정/체험처</th><th>주소</th><th>메모(연락처 등)</th></tr></thead>
+        ${bodies}
+      </table>
+    </div>`;
 }
 
 function formatImportedAt(isoText) {
@@ -57,10 +97,11 @@ export function renderTripScheduleSection(project) {
         <button type="button" data-action="save-trip-schedule" disabled>저장</button>
       </div>
       <p class="schedule-source" data-trip-schedule-source ${sourceText ? '' : 'hidden'}>${escapeHtml(sourceText)}</p>
-      <div class="table-wrap">
+      <div data-trip-schedule-view>${scheduleViewHtml(items)}</div>
+      <div class="table-wrap" data-trip-schedule-edit hidden>
         <table class="trip-schedule-table">
           <thead>
-            <tr><th>일자</th><th>일정/체험처</th><th>도착 시간</th><th>나가는 시간</th><th>주소</th><th>관계자 연락처</th></tr>
+            <tr><th>일자</th><th>일정/체험처</th><th>도착 시간</th><th>나가는 시간</th><th>주소</th><th>메모(연락처 등)</th></tr>
           </thead>
           <tbody>${scheduleRowsHtml(items)}</tbody>
         </table>
@@ -71,6 +112,11 @@ export function renderTripScheduleSection(project) {
 export function setTripScheduleEditing(section, editing) {
   if (!section) return;
   section.dataset.editing = editing ? 'true' : 'false';
+  // 수정할 때는 입력 표를, 아닐 때는 날짜별로 묶은 보기 표를 보여 준다.
+  const view = section.querySelector('[data-trip-schedule-view]');
+  const edit = section.querySelector('[data-trip-schedule-edit]');
+  if (view) view.hidden = editing;
+  if (edit) edit.hidden = !editing;
   section.querySelectorAll('[data-schedule-field]').forEach(input => {
     input.readOnly = !editing;
   });
@@ -85,6 +131,11 @@ export function setTripScheduleEditing(section, editing) {
     editButton.textContent = editing ? '수정 중' : '수정';
   }
   if (saveButton) saveButton.disabled = !editing;
+}
+
+/** 입력 표의 tbody. 보기 표에도 tbody가 있으므로 반드시 이 함수로 찾는다. */
+export function scheduleEditBody(section) {
+  return section?.querySelector('[data-trip-schedule-edit] tbody') ?? null;
 }
 
 export function newTripScheduleRowHtml() {
@@ -147,7 +198,7 @@ export function startTripScheduleAnalysisTimer(input) {
 
 export function replaceTripScheduleDraft(section, items, source) {
   if (!section || !Array.isArray(items) || !items.length) return false;
-  const tbody = section.querySelector('tbody');
+  const tbody = scheduleEditBody(section);
   if (!tbody) return false;
   const draftItems = items.map(item => createTripScheduleItem(item));
   tbody.innerHTML = scheduleRowsHtml(draftItems);

@@ -1,6 +1,5 @@
-import { projectCounts } from '../../engine.js';
-import { fixedCostStaffShares } from '../../fixedCosts.js';
-import { escapeHtml, formatWon, number } from '../../utils.js';
+import { checkStudentExpenses } from '../../expenseChecks.js';
+import { escapeHtml } from '../../utils.js';
 import { renderExpenseRows } from '../expenseTable.js';
 import { renderFixedCostTable } from './fixedCostSection.js';
 
@@ -16,6 +15,16 @@ function expenseTable(id, kind, expenses) {
     </div>`;
 }
 
+function expenseCheckList(project) {
+  const issues = checkStudentExpenses(project);
+  if (!issues.length) return '<p class="expense-checks ok-text">기초자료 점검: 확인할 항목이 없습니다.</p>';
+  return `
+    <div class="expense-checks">
+      <strong>기초자료 점검</strong> <span class="help">저장은 할 수 있습니다. 저장하면 다시 점검합니다.</span>
+      <ul>${issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join('')}</ul>
+    </div>`;
+}
+
 export function renderStudentExpenseSection(project) {
   return `
     <fieldset class="section-fieldset expense-section" data-expense-section="student" data-project-section="expenses">
@@ -28,31 +37,8 @@ export function renderStudentExpenseSection(project) {
         <button type="button" data-action="add-expense" data-expense-kind="student">항목 추가</button>
       </div>
       ${expenseTable('studentExpenseTableBody', 'student', project.expenses ?? [])}
+      ${expenseCheckList(project)}
     </fieldset>`;
-}
-
-function staffSharesFromFixedCosts(project) {
-  const c = projectCounts(project);
-  const shares = fixedCostStaffShares(project, { participants: c.participants, dayAbsent: c.contractedAbsent, chaperones: c.chaperones });
-  if (!shares.length) return '';
-  const won = value => formatWon(Math.round(number(value)));
-  const rows = shares.map(share => `
-    <tr>
-      <td>${escapeHtml(share.label)}</td>
-      <td class="number">${share.count === null ? '-' : `${share.count}명 × ${won(share.perPerson)}`}</td>
-      <td class="number">${won(share.total)}</td>
-    </tr>`).join('');
-  const total = shares.reduce((sum, share) => sum + share.total, 0);
-  return `
-    <h3>기타비에서 넘어온 인솔자 비용 <span class="help">자동 계산 · 수정은 학생용 기타비에서</span></h3>
-    <div class="table-wrap">
-      <table class="compact-table">
-        <thead><tr><th>항목</th><th>산출</th><th>금액</th></tr></thead>
-        <tbody>${rows}</tbody>
-        <tfoot><tr class="total"><th colspan="2">합계</th><td class="number">${won(total)}</td></tr></tfoot>
-      </table>
-    </div>
-    <h3>인솔자 체험처</h3>`;
 }
 
 export function renderStaffExpenseSection(project) {
@@ -60,10 +46,9 @@ export function renderStaffExpenseSection(project) {
     <fieldset class="section-fieldset expense-section" data-expense-section="staff" data-project-section="expenses">
       <legend>체험처/비용(인솔자용)</legend>
       <button type="button" class="section-save" data-action="save-staff-expenses">저장</button>
-      ${staffSharesFromFixedCosts(project)}
-      <p class="help">1인당 금액은 인솔자 수 × 단가, 총액은 입력한 금액 그대로 계산합니다.</p>
+      <p class="help">초안 자동 작성을 누르면 학생용 체험처와 기타비의 인솔자 몫(버스비 1인당 금액, 버림 잔액, 1인당 숙소비·보험비)을 채웁니다. 초안을 보고 고친 뒤 저장하세요. 1인당 금액은 인솔자 수 × 단가, 총액은 입력한 금액 그대로 계산합니다.</p>
       <div class="toolbar">
-        <button type="button" data-action="copy-student-expenses">학생용 작성 내용 붙여넣기</button>
+        <button type="button" data-action="draft-staff-expenses">초안 자동 작성</button>
         <button type="button" data-action="add-expense" data-expense-kind="staff">항목 추가</button>
       </div>
       ${expenseTable('staffExpenseTableBody', 'staff', project.staffExpenses ?? [])}

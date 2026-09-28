@@ -6,6 +6,7 @@ import {
   newTripScheduleRowHtml,
   readTripScheduleSection,
   replaceTripScheduleDraft,
+  scheduleEditBody,
   setTripScheduleEditing,
   setTripScheduleUploadStatus,
   startTripScheduleAnalysisTimer
@@ -89,7 +90,7 @@ export function createTripScheduleController({
 
   function addRow(button) {
     const section = button.closest('[data-trip-schedule-section]');
-    const tbody = section?.querySelector('tbody');
+    const tbody = scheduleEditBody(section);
     if (!tbody) return;
     tbody.querySelector('[data-trip-schedule-empty]')?.remove();
     tbody.insertAdjacentHTML('beforeend', newTripScheduleRowHtml());

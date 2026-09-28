@@ -4,7 +4,7 @@ import { createOtherSupport } from '../js/budget.js';
 import { createExpense, createProject } from '../js/presets.js';
 import { addAllocations, normalizeProposalPlan } from '../js/proposalPlan.js';
 import { EDUCATION_BUDGET_ID, STUDENT_BUDGET_ID, VULNERABLE_BUDGET_ID } from '../js/proposalPlanner.js';
-import { buildSettlementReport, dayCount, periodText, settlementRowTsv } from '../js/settlementReport.js';
+import { buildSettlementReport, dayCount, periodText } from '../js/settlementReport.js';
 
 // 주례여자중학교_2026학년도 상반기 (중2)현장체험학습비 지원금 정산 서식.xlsx 7행과 같은 조건
 function settledProject() {
@@ -63,6 +63,7 @@ test('정산 서식 7행 값은 실제 제출한 정산 서식과 같다', () =>
   assert.equal(values.studentBurden, 2_236_000);
   assert.equal(values.externalSupport, 0);
   assert.equal(values.burdenSubtotal, 4_862_000);
+  assert.equal(values.dayAbsentCommonCost, 184_900);
   assert.equal(values.remarks, [
     '학교 자체 지원:',
     '- 예술문화체험비(1인당 18,000원 * 52명 = 936,000원)',
@@ -82,15 +83,8 @@ test('외부 지원금은 학교부담이 아니라 외부지원 칸으로 간�
   assert.match(values.remarks, /외부 지원:\n- 예술문화체험비/);
 });
 
-test('한 줄 복사는 B~X 순서이고 병합 칸(H, P)은 비우며 여러 줄 비고는 따옴표로 감싼다', () => {
-  const { values } = buildSettlementReport(settledProject(), { name: '주례여자중학교' });
-  const cells = settlementRowTsv(values).split('\t');
-  assert.equal(cells[0], '주례여자중학교');
-  assert.equal(cells[5], '5.13.~5.15.');
-  assert.equal(cells[6], '');
-  assert.equal(cells[14], '');
-  assert.equal(cells[15], '20360000');
-  assert.ok(cells.at(-1).startsWith('"학교 자체 지원:'));
+test('기간과 일수는 서식 형식(연도 생략)으로 만든다', () => {
+  assert.equal(periodText('2026-05-13', '2026-05-15'), '5.13.~5.15.');
   assert.equal(periodText('2026-05-13', ''), '5.13.');
   assert.equal(dayCount('2026-05-13', '2026-05-15'), 3);
 });

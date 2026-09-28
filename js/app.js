@@ -10,13 +10,12 @@ import { KAKAO_JAVASCRIPT_KEY } from './config/kakaoConfig.js';
 import { createDefaultAiClient } from './ai/createDefaultAiClient.js';
 import { createProposalController } from './controllers/proposalController.js';
 import { createTripScheduleController } from './controllers/tripScheduleController.js';
+import { buildStaffDraft } from './staffDraft.js';
 import { getState, persistState, replaceState, updateState } from './state.js';
 import { downloadJson, escapeHtml, number } from './utils.js';
 import {
   addExpenseRow,
-  cloneExpensesForStaff,
   moveExpenseRow,
-  readExpenseRows,
   removeExpenseRow,
   replaceExpenseRows,
   updateExpenseRowButtons
@@ -725,20 +724,17 @@ main.addEventListener('click', event => {
     return;
   }
 
-  if (action === 'copy-student-expenses' && form) {
-    const project = getState().projects.find(item => item.id === currentPage.projectId);
-    const studentTbody = form.querySelector('#studentExpenseTableBody');
+  if (action === 'draft-staff-expenses' && form) {
+    const project = currentProject();
     const staffTbody = form.querySelector('#staffExpenseTableBody');
-    if (!project || !studentTbody || !staffTbody) return;
+    if (!project || !staffTbody) return;
+    if (staffTbody.querySelector('[data-expense-row]') && !confirm('현재 인솔자용 작성 내용이 있습니다. 초안으로 덮어쓸까요?')) return;
 
-    const staffHasRows = staffTbody.querySelector('[data-expense-row]');
-    if (staffHasRows && !confirm('현재 인솔자용 작성 내용이 있습니다. 학생용 내용으로 덮어쓸까요?')) return;
-
-    const currentStudentExpenses = readExpenseRows(studentTbody, project.expenses);
-    const copied = cloneExpensesForStaff(currentStudentExpenses);
-    replaceExpenseRows(staffTbody, copied, 'staff');
+    // 아직 저장하지 않은 학생용 표와 기타비 입력도 초안에 반영한다.
+    const draft = buildStaffDraft(readProjectForm(form, project));
+    replaceExpenseRows(staffTbody, draft, 'staff');
     dirty = true;
-    showMessage('학생용 작성 내용을 인솔자용에 붙여넣었습니다. 저장하면 반영됩니다.');
+    showMessage(`인솔자용 초안 ${draft.length}개 항목을 만들었습니다. 확인하고 고친 뒤 저장하세요.`);
     return;
   }
 

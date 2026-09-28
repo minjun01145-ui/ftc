@@ -548,10 +548,40 @@ table input[type="text"] { min-width: 150px; }
 
 /* 정산 서식 도우미 */
 .settlement-warnings { margin: 0 0 10px; padding: 8px 12px 8px 28px; border: 1px solid #e2c48a; background: #fffaf0; line-height: 1.7; }
-.settlement-table th[scope="row"] { width: 40px; background: #f4f4f4; }
-.settlement-table .settlement-value { font-weight: bold; white-space: normal; }
-.settlement-table tr.formula-row td { color: #666; }
-.settlement-table td.help { white-space: normal; }
 .settlement-remarks { border: 1px solid #bbb; background: #fafafa; padding: 10px 12px; white-space: pre-wrap; font-family: inherit; margin: 6px 0; }
 .budget-card footer { flex-wrap: wrap; }
 .card-actions .small-button { white-space: nowrap; }
+
+/* 날짜별 색 구분(일정·체험처 표 공통) */
+.day-tone-0 { --day-tone: #e8f1fb; --day-tone-strong: #3d7ab8; }
+.day-tone-1 { --day-tone: #eaf6ea; --day-tone-strong: #3f8f4a; }
+.day-tone-2 { --day-tone: #fdf1e3; --day-tone-strong: #c07a1c; }
+.day-tone-3 { --day-tone: #f3ecfa; --day-tone-strong: #7b55a8; }
+.day-tone-4 { --day-tone: #fbe9ee; --day-tone-strong: #b34a66; }
+tr[class*="day-tone-"] > td { background: var(--day-tone); }
+tr[class*="day-tone-"] > td:first-child { box-shadow: inset 4px 0 0 var(--day-tone-strong); }
+
+.schedule-view-table tbody.schedule-day tr.schedule-day-head th {
+  text-align: left; background: var(--day-tone-strong, #666); color: #fff; padding: 6px 10px; font-size: 14px;
+}
+.schedule-view-table tbody.schedule-day td { background: var(--day-tone, #fff); white-space: normal; }
+.schedule-view-table .schedule-time { white-space: nowrap; color: #333; width: 120px; }
+.schedule-view-table .schedule-name { font-weight: bold; }
+.schedule-empty { color: #666; padding: 10px 0; }
+
+/* 체험처 기초자료 점검 */
+.expense-checks { margin: 10px 0 0; color: #b00020; }
+.expense-checks.ok-text { color: #075a07; }
+.expense-checks ul { margin: 4px 0 0; padding-left: 20px; line-height: 1.7; }
+
+/* 정산 참고 */
+.settlement-basics { font-weight: bold; margin: 6px 0 10px; }
+.ref-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.ref-card { border: 1px solid #bbb; background: #fff; padding: 10px 14px; margin-bottom: 12px; }
+.ref-cards .ref-card { margin-bottom: 0; }
+.ref-card h3 { margin: 0 0 8px; font-size: 15px; border-bottom: 1px solid #ddd; padding-bottom: 6px; }
+.ref-item { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 4px 0; }
+.ref-item .ref-value { text-align: right; font-variant-numeric: tabular-nums; }
+.ref-item .ref-note { grid-column: 1 / -1; color: #666; font-size: 12px; }
+.ref-item.strong .ref-label, .ref-item.strong .ref-value { font-weight: bold; }
+.ref-item.strong .ref-value { font-size: 16px; }

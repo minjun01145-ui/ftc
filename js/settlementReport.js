@@ -3,34 +3,9 @@ import { EDUCATION_BUDGET_ID, STUDENT_BUDGET_ID, VULNERABLE_BUDGET_ID, buildProp
 import { number } from './utils.js';
 
 /**
- * 교육청 '(초6·중2·고2) 현장체험학습비 지원금 정산 서식' 7행에 들어갈 값.
- * 열 순서와 안내 문구는 서식 파일(B~X열, 셀 메모)을 그대로 따른다.
+ * 교육청 '(초6·중2·고2) 현장체험학습비 지원금 정산 서식'을 채울 때 참고할 값.
  * 품의 도우미의 예산 배정 결과를 쓰므로, 시행 후 인원·비용을 실제대로 고친 뒤 확인한다.
  */
-export const SETTLEMENT_COLUMNS = Object.freeze([
-  { col: 'B', key: 'schoolName', label: '학교명(정식명칭)' },
-  { col: 'C', key: 'schoolLevel', label: '급별(초/중/고)' },
-  { col: 'D', key: 'establishment', label: '설립별(공립/사립)' },
-  { col: 'E', key: 'grade', label: '대상학년' },
-  { col: 'F', key: 'executionMode', label: '추진방식' },
-  { col: 'G', key: 'period', label: '기간', merged: 'G:H', hint: '실시한 일자 모두 기재, 연도는 생략' },
-  { col: 'I', key: 'days', label: '일수' },
-  { col: 'J', key: 'place', label: '장소' },
-  { col: 'K', key: 'totalStudents', label: '해당학년 총 학생수' },
-  { col: 'L', key: 'regularParticipants', label: '전체 참여인원(취약계층 제외)', hint: '취약계층 해당자는 별도 칸(M)에 입력' },
-  { col: 'M', key: 'vulnerableParticipants', label: '취약계층 참여인원(A)' },
-  { col: 'N', key: 'participants', label: '참여인원 계', formula: true },
-  { col: 'O', key: 'perPerson', label: '1인당 현장체험학습비', merged: 'O:P', hint: '교육청 지원 상한액이 아닌 실제 학교 1인당 단가' },
-  { col: 'Q', key: 'grantTotal', label: '지원금 교부액' },
-  { col: 'R', key: 'executed', label: '지원금 집행액' },
-  { col: 'S', key: 'balance', label: '잔액(원단위 절사)', formula: true },
-  { col: 'T', key: 'schoolBurden', label: '지원금 외 부담액 - 학교부담', hint: '1인당 단가가 아닌 총액, 교직원 인솔비 제외' },
-  { col: 'U', key: 'studentBurden', label: '지원금 외 부담액 - 학생부담', hint: '1인당 단가가 아닌 총액, 교직원 인솔비 제외' },
-  { col: 'V', key: 'externalSupport', label: '지원금 외 부담액 - 외부지원', hint: '1인당 단가가 아닌 총액, 교직원 인솔비 제외' },
-  { col: 'W', key: 'burdenSubtotal', label: '지원금 외 부담액 - 소계', formula: true },
-  { col: 'X', key: 'remarks', label: '비고' }
-]);
-
 const won = value => `${Math.round(number(value)).toLocaleString('ko-KR')}원`;
 
 function parseDate(text) {
@@ -110,6 +85,8 @@ export function buildSettlementReport(project, school = {}) {
     studentBurden,
     externalSupport,
     burdenSubtotal: schoolBurden + studentBurden + externalSupport,
+    dayAbsentCount: proposal.counts.dayAbsent,
+    dayAbsentCommonCost: proposal.dayAbsentTotal,
     remarks: remarks.join('\n')
   };
 
@@ -123,18 +100,4 @@ export function buildSettlementReport(project, school = {}) {
   if (values.grade === '') warnings.push('인원에서 대상 학년을 선택해 주세요.');
 
   return { values, warnings };
-}
-
-/** 엑셀에 붙여넣을 수 있는 한 줄(B~X). 병합된 H, P열은 비워 둔다. 여러 줄 비고는 따옴표로 감싼다. */
-export function settlementRowTsv(values) {
-  const cell = value => {
-    const text = String(value ?? '');
-    return /[\t\n"]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
-  };
-  const cells = [];
-  for (const column of SETTLEMENT_COLUMNS) {
-    cells.push(cell(values[column.key]));
-    if (column.merged) cells.push('');
-  }
-  return cells.join('\t');
 }

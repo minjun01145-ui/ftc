@@ -1,16 +1,9 @@
 import { studentCostLines, sumLines } from '../../costLines.js';
 import { projectCounts } from '../../engine.js';
+import { koreanDateLabel } from '../../dates.js';
 import { escapeHtml, number } from '../../utils.js';
 
 const won = value => Math.round(number(value)).toLocaleString('ko-KR');
-
-function dateLabel(isoDate) {
-  const match = String(isoDate).match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!match) return '';
-  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-  const weekday = '일월화수목금토'[date.getDay()];
-  return `${Number(match[2])}월 ${Number(match[3])}일(${weekday})`;
-}
 
 /**
  * 표의 첫 칸(항목). 날짜가 있는 항목은 같은 날짜끼리 묶어 한 번만 쓰고(엑셀 병합 셀과 같은 모양),
@@ -22,7 +15,7 @@ function withGroupCells(lines) {
     if (index > 0 && !lines[index - 1].isFixedCost && lines[index - 1].date === line.date) return { line, group: null, span: 0 };
     let span = 1;
     while (lines[index + span] && !lines[index + span].isFixedCost && lines[index + span].date === line.date) span += 1;
-    return { line, group: dateLabel(line.date), span };
+    return { line, group: koreanDateLabel(line.date), span };
   });
 }
 
