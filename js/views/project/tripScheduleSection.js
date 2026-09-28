@@ -96,6 +96,7 @@ export function renderTripScheduleSection(project) {
         <button type="button" data-action="edit-trip-schedule" ${hasItems ? '' : 'disabled'}>수정</button>
         <button type="button" data-action="save-trip-schedule" disabled>저장</button>
       </div>
+      <p class="help">운영위원회 안건·실시 계획 등 PDF·HWPX 문서를 올리면 세부 일정 표(시간·일정 칸)나 주요 경로(➡)를 읽어 초안을 만듭니다.</p>
       <p class="schedule-source" data-trip-schedule-source ${sourceText ? '' : 'hidden'}>${escapeHtml(sourceText)}</p>
       <div data-trip-schedule-view>${scheduleViewHtml(items)}</div>
       <div class="table-wrap" data-trip-schedule-edit hidden>

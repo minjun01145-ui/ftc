@@ -36,30 +36,35 @@ API 키는 Firebase Secret Manager에만 저장하며 프런트엔드 코드나 
 
 ## 사업과 일정
 
-사업 제목을 누르면 `사업정보` 화면이 열립니다. 기존 `전체보기`, `인원`, `체험처/비용`, `예산 관리`, `리포트 보기`, `정산` 화면은 하위메뉴에서 선택할 수 있습니다. `업무 흐름` 계산기와 저장 데이터는 과거 자료 및 확정 계획 호환을 위해 보존하지만 일반 화면으로 열 수 없습니다. 부분 화면 저장은 화면에 없는 사업 데이터를 보존합니다.
+사업 제목을 누르면 `사업정보` 화면이 열립니다. 하위메뉴는 `사업정보`, `인원`, `체험처/비용`, `예산 관리`, `학생 1인별 금액 산출내역 보기`, `품의 도우미(예산 배정)`, `정산` 순서입니다. 사업은 왼쪽 목록의 `+`로 추가하고 `×`로 삭제합니다. `업무 흐름` 계산기와 저장 데이터는 과거 자료 호환을 위해 보존하지만 일반 화면으로 열 수 없습니다.
 
-학교 기본정보에는 사업별 학교 지원 배정 입력을 두지 않습니다. 새 계산은 사업의 `schoolSupport`와 재원 목록에 입력된 학교 지원 금액 및 제한을 사용합니다. 가져오거나 기존 저장한 `school.projectBudgets`와 과거 확정 스냅샷은 정규화 과정에서 보존합니다.
+### 일정 문서 가져오기(AI 없이, 외부 전송 없음)
 
-사업정보의 일정에서 PDF 또는 HWPX 파일 한 개를 선택하면 문서 텍스트를 추출하고 일정 초안을 만듭니다. 날짜와 일정 항목을 확인·수정한 뒤 `저장`을 눌러야 일정과 연결 비용에 반영됩니다. 스캔 PDF의 OCR과 `.hwp`는 지원하지 않습니다. 문서 본문은 서버 메모리에서 처리하며 브라우저 저장 데이터나 Firebase Storage에 저장하지 않습니다.
+사업정보의 일정에서 PDF 또는 HWPX 파일 한 개를 선택하면 **브라우저 안에서** 문서를 읽어 일정 초안을 만듭니다. 파일은 외부 서버로 보내지 않습니다.
 
-일정 문서 기능을 연결하려면 Firebase 프로젝트 ID, 활성 AI gateway URL, 모델 및 Secret Manager 설정이 필요합니다. AI Functions는 `ftc1-6b064` 프로젝트(`asia-northeast3`)에 배포되어 있고, [`aiConfig.js`](js/ai/aiConfig.js)에 해당 공통 주소가 설정되어 있습니다. `.firebaserc`와 프로젝트별 AI 환경 파일은 저장소에 두지 않습니다. Windows PowerShell 5에서는 `&&`를 쓸 수 없으므로 `cd ai-functions`, `npm ci`, `cd ..`를 따로 실행한 뒤 배포합니다.
+- **세부 일정 표**: `시간`과 `상세일정(일정·내용)` 머리글이 있는 표를 찾아 행을 복원합니다. 일자 칸의 `제1일차`, `5월13일(수)`로 날짜를 정하고, 시간이 앞 행보다 이르면 다음 날로 넘깁니다. 비고 칸은 `메모(연락처 등)`로 들어갑니다.
+- **주요 경로**: 세부 일정 표가 없으면 `5월 13일(수) 학교 출발 ➡ 롯데월드 ➡ …` 같은 경로 줄을 일정으로 읽습니다.
+- PDF는 글자 위치(PDF.js), HWPX는 표 셀(JSZip + XML)을 읽습니다. 스캔한 이미지 PDF와 `.hwp`는 읽지 못합니다.
+- 연도는 문서의 `2026년 5월 …` 표기에서 찾고, 없으면 기본정보의 학년도를 씁니다.
 
-1. 실제 Firebase 프로젝트를 선택하고 `ai-functions/.env.example`을 `.env.<프로젝트ID>`로 복사합니다. `AI_PROVIDER`, `AI_DEFAULT_MODEL`, `AI_ALLOWED_ORIGINS`를 설정합니다.
-2. Ollama Cloud 키를 `firebase functions:secrets:set AI_PROVIDER_SECRETS`로 Secret Manager에 저장합니다. 값은 `{"apiKey":"..."}` JSON 또는 API 키 원문이며 저장소에 추가하지 않습니다. 문서 가져오기 오류 원인은 `firebase functions:log --only aiDocumentGateway`로 확인합니다.
-3. `firebase deploy --only functions:ai`로 AI 코드베이스를 배포하고 출력된 `aiDocumentGateway` 함수 URL에서 공통 Functions 기본 주소를 확인합니다.
-4. [`aiConfig.js`](js/ai/aiConfig.js)에서 `enabled: true`와 `gatewayUrl`을 설정합니다. `gatewayUrl`에는 함수 이름 경로를 제외한 공통 주소를 입력합니다. transport가 `aiHealth`, `aiGateway`, `aiDocumentGateway` 경로를 붙입니다.
+가져온 초안은 확인·수정한 뒤 `저장`을 눌러야 일정과 체험처/비용에 반영됩니다.
+
+사용 라이브러리(명칭·용도·라이선스)는 [`vendor/README.md`](vendor/README.md)에 적었습니다.
+
+### AI 분석(선택, 기본 꺼짐)
+
+예전 AI 문서 분석 모듈(`js/ai/`, `js/services/scheduleDocumentImport.js`, `ai-functions/`)은 그대로 남아 있습니다. [`js/config/importConfig.js`](js/config/importConfig.js)의 `SCHEDULE_IMPORT_ENGINE`을 `'ai'`로 바꾸면 문서를 Firebase Functions의 AI gateway로 보내 분석합니다. 교육청 승인 없이 업무 자료를 외부 AI로 보내면 안 되므로 기본값은 `'local'`입니다.
+
+AI 분석을 쓰려면 Firebase 프로젝트 ID, 활성 AI gateway URL, 모델 및 Secret Manager 설정이 필요합니다. AI Functions는 `ftc1-6b064` 프로젝트(`asia-northeast3`)에 배포되어 있고, [`aiConfig.js`](js/ai/aiConfig.js)에 해당 공통 주소가 설정되어 있습니다.
+
+1. `ai-functions/.env.example`을 `.env.<프로젝트ID>`로 복사하고 `AI_PROVIDER`, `AI_DEFAULT_MODEL`, `AI_ALLOWED_ORIGINS`를 설정합니다.
+2. Ollama Cloud 키를 `firebase functions:secrets:set AI_PROVIDER_SECRETS`로 Secret Manager에 저장합니다.
+3. `firebase deploy --only functions:ai`로 배포합니다. 오류 원인은 `firebase functions:log --only aiDocumentGateway`로 확인합니다.
 
 ## 체험처/비용
 
-학생용과 인솔자용 비용은 별도 데이터로 저장됩니다.
-
-- 기존 `expenses` 데이터는 학생용 비용으로 그대로 유지됩니다.
-- 인솔자용은 `staffExpenses`에 별도로 저장됩니다.
-- `학생용 작성 내용 붙여넣기`를 누르면 현재 화면의 학생용 행을 새 ID로 복사하므로 이후 두 표를 독립적으로 수정할 수 있습니다.
-- 각 비용 항목에는 `도착 시간`, `나가는 시간`, `주소`, `관계자 연락처` 세부정보를 저장할 수 있습니다.
-- 세부정보는 향후 안내자료 생성 기능에서 재사용할 수 있도록 비용 계산값과 분리된 `details` 객체에 저장됩니다.
-
-`js/workflowEngine.js`가 계획·실적의 학생 재원, 학생 부담, 인솔자·운영 경비를 하나의 계산 결과로 산출합니다. 독립 인솔자 비용은 학생 재원에 섞지 않습니다.
+- 학생용: 기타비(버스비·숙소비·보험비 + 사용자 추가 항목)와 체험처 표. 체험처 아래 `기초자료 점검`이 단가·식사·날짜를 확인합니다.
+- 인솔자용: `초안 자동 작성`으로 학생용 체험처와 기타비의 인솔자 몫(버스비 1인당, 버림 잔액 등)을 채운 뒤 고칩니다.
 
 ## 파일 구조
 
@@ -80,7 +85,11 @@ API 키는 Firebase Secret Manager에만 저장하며 프런트엔드 코드나 
 - `js/views/expenseTable.js` : 학생·인솔자 비용표 렌더링과 DOM/폼 처리
 - `js/services/schoolInfo.js` : 학교 검색·학생수 조회를 위한 프런트엔드 서비스
 - `js/services/schoolInfoConfig.js` : 학교 조회 Firebase Function 주소 설정
-- `js/services/scheduleDocumentImport.js` : PDF/HWPX 일정 업로드와 초안 응답 처리
+- `js/services/localScheduleImport.js` : AI 없이 PDF/HWPX 일정을 읽는 가져오기 서비스(기본)
+- `js/documents/` : 브라우저 안에서 PDF 글자 위치(`pdfLayoutReader.js`)와 HWPX 표(`hwpxReader.js`) 읽기
+- `js/scheduleImport/` : 세부 일정 표·주요 경로를 일정 행으로 바꾸는 순수 해석기(DOM 없음, Node 테스트 가능)
+- `js/services/scheduleDocumentImport.js` : AI 문서 분석 가져오기 서비스(선택)
+- `vendor/` : PDF.js, JSZip(라이선스는 `vendor/README.md`)
 - `js/ai/` : JSON 및 multipart AI client와 transport
 - `functions/src/schoolData/` : 학교 조회 코드베이스의 학교알리미 검색·학생수 응답 모듈
 - `functions/` : 학교 조회 전용 Firebase 코드베이스. AI 코드나 AI 시크릿을 참조하지 않음

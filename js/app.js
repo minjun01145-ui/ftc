@@ -5,6 +5,8 @@ import { downloadWorkflowWorkbook } from './services/workbookExport.js';
 import { getSchoolStudentCounts, searchSchools } from './services/schoolInfo.js';
 import { createSchoolStudentLookup } from './services/schoolStudentLookup.js';
 import { createScheduleDocumentImportService } from './services/scheduleDocumentImport.js';
+import { createLocalScheduleImportService } from './services/localScheduleImport.js';
+import { SCHEDULE_IMPORT_ENGINE } from './config/importConfig.js';
 import { createKakaoPlaceSearch } from './services/kakaoPlaces.js';
 import { KAKAO_JAVASCRIPT_KEY } from './config/kakaoConfig.js';
 import { createDefaultAiClient } from './ai/createDefaultAiClient.js';
@@ -61,8 +63,15 @@ const proposal = createProposalController({
   showMessage
 });
 
+// 기본은 AI 없이 문서를 직접 읽는다. AI 분석은 설정(importConfig.js)으로만 켠다.
+function createDocumentImportService() {
+  return SCHEDULE_IMPORT_ENGINE === 'ai'
+    ? createScheduleDocumentImportService({ aiClient: createDefaultAiClient() })
+    : createLocalScheduleImportService();
+}
+
 const tripSchedule = createTripScheduleController({
-  documentImport: createScheduleDocumentImportService({ aiClient: createDefaultAiClient() }),
+  documentImport: createDocumentImportService(),
   placeSearch: createKakaoPlaceSearch({ javascriptKey: KAKAO_JAVASCRIPT_KEY }),
   getProject: currentProject,
   getSchoolYear: () => getState().school.schoolYear,

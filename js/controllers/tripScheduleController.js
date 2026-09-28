@@ -74,7 +74,8 @@ export function createTripScheduleController({
         if (form.elements.endDate) form.elements.endDate.value = range.endDate;
       }
       const rangeText = range ? ` 기간(${range.startDate} ~ ${range.endDate})도 입력했습니다.` : '';
-      setTripScheduleUploadStatus(input, `${items.length}개 일정을 초안으로 가져왔습니다.${rangeText} 확인한 뒤 저장해 주세요.`);
+      const via = documentImport.label ? `(${documentImport.label})` : '';
+      setTripScheduleUploadStatus(input, `${items.length}개 일정을 초안으로 가져왔습니다${via}.${rangeText} 확인한 뒤 저장해 주세요.`);
     } catch (error) {
       stopTimer();
       if (!isCurrent()) return;

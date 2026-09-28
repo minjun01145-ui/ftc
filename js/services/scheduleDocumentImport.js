@@ -12,6 +12,7 @@ export class ScheduleDocumentImportError extends Error {
 
 export function createScheduleDocumentImportService({ aiClient } = {}) {
   return Object.freeze({
+    label: 'AI 분석',
     validateFile: validateScheduleFile,
 
     async importFile(file, context = {}) {

@@ -1,3 +1,5 @@
+import { loadScript } from './scriptLoader.js';
+
 const SDK_URL = 'https://dapi.kakao.com/v2/maps/sdk.js';
 
 export class PlaceSearchError extends Error {
@@ -9,13 +11,8 @@ export class PlaceSearchError extends Error {
 }
 
 function loadScriptTag(src) {
-  return new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = src;
-    script.async = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new PlaceSearchError('카카오맵을 불러오지 못했습니다. 네트워크 또는 앱 키의 도메인 등록을 확인해 주세요.', { code: 'KAKAO_SDK_LOAD_FAILED' }));
-    document.head.append(script);
+  return loadScript(src).catch(() => {
+    throw new PlaceSearchError('카카오맵을 불러오지 못했습니다. 네트워크 또는 앱 키의 도메인 등록을 확인해 주세요.', { code: 'KAKAO_SDK_LOAD_FAILED' });
   });
 }
 
@@ -32,12 +29,12 @@ function toPlace(document) {
  * 카카오맵 장소(키워드) 검색.
  * SDK는 처음 검색할 때 한 번만 불러온다. 화면 코드는 search() 결과(이름·주소·전화)만 사용한다.
  */
-export function createKakaoPlaceSearch({ javascriptKey, loadScript = loadScriptTag, getGlobal = () => globalThis.kakao } = {}) {
+export function createKakaoPlaceSearch({ javascriptKey, loadScript: load = loadScriptTag, getGlobal = () => globalThis.kakao } = {}) {
   const key = String(javascriptKey ?? '').trim();
   let sdkReady = null;
 
   function loadSdk() {
-    sdkReady ??= loadScript(`${SDK_URL}?appkey=${encodeURIComponent(key)}&libraries=services&autoload=false`)
+    sdkReady ??= load(`${SDK_URL}?appkey=${encodeURIComponent(key)}&libraries=services&autoload=false`)
       .then(() => new Promise(resolve => getGlobal().maps.load(resolve)))
       .catch(error => {
         sdkReady = null;
