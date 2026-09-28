@@ -4,7 +4,7 @@ import { calculateExpense, studentExpenseItems } from './engine.js';
  * 학생 1인별 금액 산출 내역의 한 줄씩(시행 전 데이터 보기, 품의 도우미가 함께 쓴다).
  * 금액이 없는 일정(이동, 자유시간 등)은 빼고, 돈이 드는 항목만 돌려준다.
  *
- * line = { id, date, name, description, note, isFixedCost, includesDayAbsent,
+ * line = { id, date, name, description, basis(기타비 단가 산출 근거), note, isFixedCost, includesDayAbsent,
  *          perPerson(학생 1인 금액), quantity(학생 수), total(해당 항목 총액) }
  */
 export function studentCostLines(project) {
@@ -19,6 +19,7 @@ export function studentCostLines(project) {
         date: String(item.date ?? ''),
         name: String(item.name ?? ''),
         description: String(item.description ?? ''),
+        basis: String(item.basis ?? ''),
         note: String(item.note ?? ''),
         isFixedCost: Boolean(item.fixedCostKey),
         includesDayAbsent: item.quantityBase === 'participantsPlusAbsent',

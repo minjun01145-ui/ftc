@@ -26,7 +26,9 @@ function withGroupCells(lines) {
   });
 }
 
+// 기타비는 1인당 금액이 어떻게 나왔는지(1인당 입력 / 총액 ÷ 학생 / 총액 ÷ 학생+인솔자)를 적는다.
 function noteText(line, counts) {
+  if (line.isFixedCost) return line.basis;
   const notes = [];
   if (line.includesDayAbsent && counts.contractedAbsent > 0) notes.push(`당일 불참 ${counts.contractedAbsent}명 포함`);
   if (line.note) notes.push(line.note);

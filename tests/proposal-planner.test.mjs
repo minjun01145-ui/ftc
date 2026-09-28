@@ -3,7 +3,15 @@ import assert from 'node:assert/strict';
 import { createOtherSupport } from '../js/budget.js';
 import { studentCostLines, sumLines } from '../js/costLines.js';
 import { createExpense, createProject } from '../js/presets.js';
-import { EDUCATION_BUDGET_ID, STUDENT_BUDGET_ID, buildProposal } from '../js/proposalPlanner.js';
+import { addAllocations, normalizeProposalPlan, removeAllocation } from '../js/proposalPlan.js';
+import {
+  EDUCATION_BUDGET_ID,
+  STUDENT_BUDGET_ID,
+  VULNERABLE_BUDGET_ID,
+  budgetChecklist,
+  buildProposal,
+  findAllocationResult
+} from '../js/proposalPlanner.js';
 
 // 2026학년도 2학년 수학여행 비용 산출 근거자료.xlsx 와 같은 조건
 function excelProject() {
@@ -20,8 +28,8 @@ function excelProject() {
     chaperones: 8,
     dayAbsentSharesCommonCost: true,
     fixedCosts: {
-      bus: { mode: 'total', amount: 9_000_000, memo: '' },
-      lodging: { mode: 'total', amount: 5_039_580, memo: '2박' },
+      bus: { mode: 'total', amount: 9_000_000, includeChaperones: true, memo: '' },
+      lodging: { mode: 'total', amount: 5_039_580, includeChaperones: false, memo: '2박' },
       insurance: { mode: 'perPerson', amount: 1600, memo: '' }
     }
   });
@@ -38,45 +46,50 @@ function excelProject() {
     item('move', '2026-05-13', '서울 이동', 0)
   ];
   project.educationSupport = { ...project.educationSupport, regularPerPerson: 220000, vulnerableMode: 'full', grantTotal: 17_174_400 };
-  const culture = createOtherSupport({ id: 'culture', name: '(학교) 문화예술체험활동비', amount: 18000, restricted: true });
-  const school = createOtherSupport({ id: 'school', name: '(학교) 현장체험학습비', amount: 32500 });
-  project.otherSupports = [culture, school];
-  project.proposalPlan = {
-    assignments: {
-      'fixed-bus': EDUCATION_BUDGET_ID, 'fixed-lodging': EDUCATION_BUDGET_ID, 'fixed-insurance': EDUCATION_BUDGET_ID,
-      'meal-coupon': EDUCATION_BUDGET_ID, ticket: EDUCATION_BUDGET_ID,
-      musical: 'culture',
-      breakfast2: 'school', lunch2: 'school'
-    },
-    order: ['fixed-bus', 'fixed-lodging', 'fixed-insurance', 'meal-coupon', 'ticket', 'musical', 'breakfast2', 'lunch2', 'dinner2', 'breakfast3', 'lunch3']
-  };
+  project.otherSupports = [
+    createOtherSupport({ id: 'culture', name: '문화예술체험활동비', amount: 18000 }),
+    createOtherSupport({ id: 'school', name: '학교 자체지원금', amount: 32500 })
+  ];
   return project;
+}
+
+const ALL_LINES = ['ticket', 'meal-coupon', 'breakfast2', 'musical', 'lunch2', 'dinner2', 'breakfast3', 'lunch3', 'fixed-bus', 'fixed-lodging', 'fixed-insurance'];
+
+function excelPlan() {
+  let plan = normalizeProposalPlan({});
+  plan = addAllocations(plan, VULNERABLE_BUDGET_ID, ALL_LINES);
+  plan = addAllocations(plan, EDUCATION_BUDGET_ID, ['fixed-bus', 'fixed-lodging', 'fixed-insurance', 'meal-coupon', 'ticket']);
+  plan = addAllocations(plan, 'culture', ['musical']);
+  plan = addAllocations(plan, 'school', ['ticket', 'breakfast2', 'lunch2']);
+  plan = addAllocations(plan, STUDENT_BUDGET_ID, ['lunch2', 'dinner2', 'breakfast3', 'lunch3']);
+  return plan;
 }
 
 const partsOf = (proposal, budgetId) => proposal.blocks
   .find(block => block.budget.id === budgetId).parts
   .map(part => [part.name, part.perPerson]);
 
-test('학생 1인별 금액 산출 내역은 엑셀과 같다(금액 없는 일정은 제외)', () => {
+test('학생 1인별 금액 산출 내역은 엑셀과 같고 기타비 비고에 산출 근거를 적는다', () => {
   const lines = studentCostLines(excelProject());
   const byName = Object.fromEntries(lines.map(line => [line.name, line]));
 
   assert.equal(lines.length, 11);
   assert.equal(byName['버스비'].perPerson, 113920);
   assert.equal(byName['버스비'].quantity, 71);
-  assert.equal(byName['버스비'].description, '9,000,000원 / 79명');
-  assert.equal(byName['숙소비'].perPerson, 70980);
-  assert.equal(byName['숙소비'].total, 5_039_580);
-  assert.equal(byName['보험비'].quantity, 70);
+  assert.equal(byName['버스비'].basis, '총액 9,000,000원 ÷ (학생 71명(당일 불참 1명 포함) + 인솔자 8명), 10원 미만 버림');
+  assert.equal(byName['숙소비'].basis, '총액 5,039,580원 ÷ 학생 71명(당일 불참 1명 포함)');
+  assert.equal(byName['숙소비'].description, '2박');
+  assert.equal(byName['보험비'].basis, '1인당 금액 1,600원 입력, 학생 70명');
   assert.equal(sumLines(lines, 'perPerson'), 313500);
   assert.equal(sumLines(lines, 'total'), 22_129_900);
 });
 
-test('예산별 품의 내용은 엑셀과 같이 예산을 채우고 넘친 금액을 다음 예산으로 넘긴다', () => {
-  const proposal = buildProposal(excelProject());
+test('예산 카드에 체크한 순서대로 채우면 엑셀의 예산별 품의 내용과 같다', () => {
+  const project = excelProject();
+  project.proposalPlan = excelPlan();
+  const proposal = buildProposal(project);
 
-  assert.deepEqual(proposal.vulnerable, { count: 17, perPerson: 313500, total: 5_329_500, burdenPerPerson: 0, burdenTotal: 0 });
-  assert.deepEqual(proposal.dayAbsent.map(row => [row.name, row.total]), [['버스비', 113920], ['숙소비', 70980]]);
+  assert.equal(proposal.blocks.find(block => block.budget.id === VULNERABLE_BUDGET_ID).total, 5_329_500);
   assert.deepEqual(partsOf(proposal, EDUCATION_BUDGET_ID), [
     ['버스비', 113920], ['숙소비', 70980], ['보험비', 1600], ['롯데월드 밀쿠폰 2장', 20000], ['롯데월드 자유이용권', 13500]
   ]);
@@ -85,24 +98,46 @@ test('예산별 품의 내용은 엑셀과 같이 예산을 채우고 넘친 금
   assert.deepEqual(partsOf(proposal, STUDENT_BUDGET_ID), [
     ['통인시장 중식', 6000], ['파크텔 석식', 15000], ['파크텔 조식', 12000], ['덕평휴게소 중식', 10000]
   ]);
+  assert.deepEqual(proposal.dayAbsent.map(row => [row.name, row.total]), [['버스비', 113920], ['숙소비', 70980]]);
 
   assert.equal(proposal.education.total, 17_174_400);
   assert.equal(proposal.education.balance, 0);
-  assert.equal(proposal.blocks.find(block => block.budget.id === 'school').total, 1_722_500);
-  assert.equal(proposal.blocks.find(block => block.budget.id === STUDENT_BUDGET_ID).total, 2_279_000);
-  assert.equal(proposal.proposalTotal, proposal.costTotal);
-  assert.equal(proposal.costTotal, 22_129_900);
+  assert.equal(proposal.unassignedTotal, 0);
+  assert.equal(proposal.vulnerableBurden.total, 0);
+  assert.equal(proposal.assignedTotal, proposal.costTotal);
   assert.deepEqual(proposal.splits.map(split => split.name), ['롯데월드 자유이용권', '통인시장 중식']);
 });
 
-test('예산 한도가 남으면 미사용 금액으로 알려 주고, 배정하지 않은 항목은 수익자 부담이 된다', () => {
+test('예산을 넘으면 최대 금액만 넣고 나머지를 다른 예산에서 고를 수 있게 남긴다', () => {
   const project = excelProject();
-  project.proposalPlan = { assignments: { 'fixed-bus': EDUCATION_BUDGET_ID }, order: [] };
+  project.proposalPlan = addAllocations(normalizeProposalPlan({}), EDUCATION_BUDGET_ID,
+    ['fixed-bus', 'fixed-lodging', 'fixed-insurance', 'ticket', 'meal-coupon']);
   const proposal = buildProposal(project);
-  const education = proposal.blocks.find(block => block.budget.id === EDUCATION_BUDGET_ID);
 
-  assert.equal(education.usedPerPerson, 113920);
-  assert.equal(education.unusedPerPerson, 220000 - 113920);
-  assert.equal(proposal.assignments.ticket, STUDENT_BUDGET_ID);
-  assert.equal(proposal.proposalTotal, proposal.costTotal);
+  const coupon = findAllocationResult(proposal, EDUCATION_BUDGET_ID, 'meal-coupon');
+  assert.equal(coupon.overBudget, true);
+  assert.equal(coupon.perPerson, 3500);
+  assert.equal(coupon.left, 16500);
+
+  const school = budgetChecklist(proposal, 'school').find(item => item.line.id === 'meal-coupon');
+  assert.equal(school.checked, false);
+  assert.equal(school.available, 16500);
+  assert.equal(proposal.regularUnassignedPerPerson, 313500 - 220000);
+});
+
+test('체크를 빼면 뒤에 체크한 항목의 금액이 다시 계산되고, 취약계층 미배정 금액은 수익자 부담이 된다', () => {
+  const project = excelProject();
+  let plan = addAllocations(normalizeProposalPlan({}), EDUCATION_BUDGET_ID, ['fixed-bus', 'fixed-lodging', 'fixed-insurance', 'ticket', 'meal-coupon']);
+  plan = removeAllocation(plan, EDUCATION_BUDGET_ID, 'ticket');
+  project.proposalPlan = plan;
+  const proposal = buildProposal(project);
+
+  assert.equal(findAllocationResult(proposal, EDUCATION_BUDGET_ID, 'meal-coupon').perPerson, 20000);
+  assert.equal(proposal.vulnerableBurden.perPerson, 313500);
+  assert.equal(proposal.assignedTotal + proposal.unassignedTotal, proposal.costTotal);
+});
+
+test('예전 저장 형식(항목별 예산 선택)은 체크 순서로 옮긴다', () => {
+  const plan = normalizeProposalPlan({ assignments: { b: 'education', a: 'school' }, order: ['a', 'b'] });
+  assert.deepEqual(plan.allocations, [{ budgetId: 'school', lineId: 'a' }, { budgetId: 'education', lineId: 'b' }]);
 });

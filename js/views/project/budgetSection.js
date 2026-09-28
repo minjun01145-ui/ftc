@@ -4,7 +4,7 @@ import { projectCounts } from '../../engine.js';
 import { escapeHtml, formatWon, number } from '../../utils.js';
 
 const money = value => formatWon(Math.round(number(value)));
-const EMPTY_OTHER_SUPPORTS = '<tr data-other-support-empty><td colspan="8" class="center">추가한 지원금이 없습니다.</td></tr>';
+const EMPTY_OTHER_SUPPORTS = '<tr data-other-support-empty><td colspan="7" class="center">추가한 지원금이 없습니다.</td></tr>';
 
 function memoInput(name, value, label) {
   return `<input type="text" class="budget-memo" name="${name}" value="${escapeHtml(value)}" placeholder="메모" aria-label="${label} 메모">`;
@@ -55,7 +55,6 @@ export function otherSupportRowHtml(support, regularParticipants) {
       <td><select data-support-field="mode" aria-label="지원 방식">${modes}</select></td>
       <td><input type="number" min="0" data-support-field="amount" value="${number(support.amount)}" aria-label="금액"></td>
       <td class="number">${support.amount > 0 ? money(perPerson) : '-'}</td>
-      <td class="center"><input type="checkbox" data-support-field="restricted" ${support.restricted ? 'checked' : ''} aria-label="지정 항목 전용"></td>
       <td><input type="text" class="budget-memo" data-support-field="memo" value="${escapeHtml(support.memo)}" placeholder="메모" aria-label="지원금 메모"></td>
       <td class="center"><button type="button" class="small-button danger" data-action="delete-other-support">삭제</button></td>
     </tr>`;
@@ -83,10 +82,10 @@ export function renderBudgetSection(project) {
           <h3>기타 지원금</h3>
           <button type="button" data-action="add-other-support">지원금 추가</button>
         </div>
-        <p class="help">학교 자체지원금, 문화예술체험활동비, 지자체 지원금 등을 추가합니다. 비취약계층 참여 학생 ${regularParticipants}명 기준이며, 총액은 인원으로 나눠 1인당 금액을 계산합니다. '지정 항목 전용'은 품의 도우미에서 직접 배정한 항목에만 씁니다.</p>
+        <p class="help">학교 자체지원금, 문화예술체험활동비, 지자체 지원금 등을 추가합니다. 비취약계층 참여 학생 ${regularParticipants}명 기준이며, 총액은 인원으로 나눠 1인당 금액을 계산합니다. 어떤 항목에 쓸지는 품의 도우미에서 정합니다.</p>
         <div class="table-wrap">
           <table class="compact-table other-support-table">
-            <thead><tr><th>순서</th><th>지원금 이름</th><th>방식</th><th>금액(원)</th><th>1인당</th><th>지정 항목 전용</th><th>메모</th><th>삭제</th></tr></thead>
+            <thead><tr><th>순서</th><th>지원금 이름</th><th>방식</th><th>금액(원)</th><th>1인당</th><th>메모</th><th>삭제</th></tr></thead>
             <tbody data-other-support-list>${supportRows}</tbody>
           </table>
         </div>
@@ -148,7 +147,6 @@ export function readBudgetInputs(form, data, previous) {
       name: field('name').value.trim(),
       mode: field('mode').value,
       amount: Math.max(0, Math.round(number(field('amount').value))),
-      restricted: field('restricted').checked,
       memo: field('memo').value.trim()
     });
   }) : previous.otherSupports;

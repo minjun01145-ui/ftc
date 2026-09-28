@@ -8,6 +8,7 @@ import { createScheduleDocumentImportService } from './services/scheduleDocument
 import { createKakaoPlaceSearch } from './services/kakaoPlaces.js';
 import { KAKAO_JAVASCRIPT_KEY } from './config/kakaoConfig.js';
 import { createDefaultAiClient } from './ai/createDefaultAiClient.js';
+import { createProposalController } from './controllers/proposalController.js';
 import { createTripScheduleController } from './controllers/tripScheduleController.js';
 import { getState, persistState, replaceState, updateState } from './state.js';
 import { downloadJson, escapeHtml, number } from './utils.js';
@@ -18,14 +19,13 @@ import {
   readExpenseRows,
   removeExpenseRow,
   replaceExpenseRows,
-  toggleCustomQuantity,
   updateExpenseRowButtons
 } from './views/expenseTable.js';
 import { readProjectForm, renderProjectPage } from './views/projectView.js';
 import { newAdminRowHtml, newManualRowHtml, newSourceRowHtml, readWorkflowForm } from './views/project/workflowSection.js';
 import { gradeStudentCount, headcountIssues } from './views/project/headcountSection.js';
 import { addOtherSupportRow, moveOtherSupportRow, removeOtherSupportRow } from './views/project/budgetSection.js';
-import { moveProposalRow } from './views/project/proposalSection.js';
+import { syncFixedCostModeControls } from './views/project/fixedCostSection.js';
 import { renderProjectList } from './views/sidebarView.js';
 import { readSchoolForm, renderSchoolPage } from './views/schoolView.js';
 
@@ -56,6 +56,12 @@ function replaceCurrentProject(nextProject) {
   render();
 }
 
+const proposal = createProposalController({
+  getProject: currentProject,
+  saveProject: replaceCurrentProject,
+  showMessage
+});
+
 const tripSchedule = createTripScheduleController({
   documentImport: createScheduleDocumentImportService({ aiClient: createDefaultAiClient() }),
   placeSearch: createKakaoPlaceSearch({ javascriptKey: KAKAO_JAVASCRIPT_KEY }),
@@ -75,7 +81,8 @@ function showMessage(text) {
   message.textContent = text;
   message.classList.add('show');
   clearTimeout(messageTimer);
-  messageTimer = setTimeout(() => message.classList.remove('show'), 1800);
+  // 긴 안내(예산 초과 등)는 읽을 시간을 더 준다.
+  messageTimer = setTimeout(() => message.classList.remove('show'), Math.max(1800, text.length * 90));
 }
 
 function renderSidebar() {
@@ -461,9 +468,9 @@ main.addEventListener('change', event => {
   }
   if (target.matches('[data-school-search]')) return;
 
-  // 품의 도우미는 예산을 고르는 즉시 저장해 다시 계산한다.
-  if (target.matches('[data-proposal-assign]') && target.form) {
-    saveProject(target.form, '배정을 반영했습니다.');
+  // 품의 도우미는 체크하는 즉시 저장해 다시 계산한다.
+  if (target.matches('[data-proposal-toggle]')) {
+    proposal.toggle(target.dataset.budgetId, target.dataset.lineId, target.checked);
     return;
   }
 
@@ -502,10 +509,7 @@ main.addEventListener('change', event => {
     }
   }
 
-  if (target.dataset.field === 'quantityBase') {
-    const row = target.closest('[data-expense-row]');
-    if (row) toggleCustomQuantity(row);
-  }
+  if (target.matches('[data-fixed-cost-mode]')) syncFixedCostModeControls(target);
 });
 
 main.addEventListener('click', event => {
@@ -666,8 +670,8 @@ main.addEventListener('click', event => {
     return;
   }
 
-  if ((action === 'move-proposal-up' || action === 'move-proposal-down') && form) {
-    if (moveProposalRow(button, action === 'move-proposal-up' ? 'up' : 'down')) saveProject(form, '품의 순서를 반영했습니다.');
+  if (action === 'proposal-fill-budget') {
+    proposal.fillBudget(button.dataset.budgetId);
     return;
   }
 
@@ -689,7 +693,7 @@ main.addEventListener('click', event => {
     const project = getState().projects.find(item => item.id === currentPage.projectId);
     if (!project) return;
     const kind = button.dataset.expenseKind === 'staff' ? 'staff' : 'student';
-    addExpenseRow(tbody, project, form?.elements.startDate?.value ?? project.startDate ?? '', kind);
+    addExpenseRow(tbody, project.startDate ?? '', kind);
     dirty = true;
     return;
   }
@@ -705,7 +709,7 @@ main.addEventListener('click', event => {
 
     const currentStudentExpenses = readExpenseRows(studentTbody, project.expenses);
     const copied = cloneExpensesForStaff(currentStudentExpenses);
-    replaceExpenseRows(staffTbody, copied, project, 'staff', false);
+    replaceExpenseRows(staffTbody, copied, 'staff');
     dirty = true;
     showMessage('학생용 작성 내용을 인솔자용에 붙여넣었습니다. 저장하면 반영됩니다.');
     return;

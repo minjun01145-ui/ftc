@@ -16,7 +16,7 @@ export const PROJECT_SECTION_ITEMS = Object.freeze([
   { key: PROJECT_SECTION.HEADCOUNT, label: '인원' },
   { key: PROJECT_SECTION.EXPENSES, label: '체험처/비용' },
   { key: PROJECT_SECTION.BUDGET, label: '예산 관리' },
-  { key: PROJECT_SECTION.PRE_TRIP, label: '시행 전 데이터 보기' },
+  { key: PROJECT_SECTION.PRE_TRIP, label: '학생 1인별 금액 산출내역 보기' },
   { key: PROJECT_SECTION.PROPOSAL, label: '품의 도우미' },
   { key: PROJECT_SECTION.REPORT, label: '리포트 보기' },
   { key: PROJECT_SECTION.SETTLEMENT, label: '정산' }

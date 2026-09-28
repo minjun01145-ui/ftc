@@ -287,8 +287,12 @@ table input[type="text"] { min-width: 150px; }
 .expense-actions button { margin: 1px; }
 
 .fixed-cost-block { margin-bottom: 14px; }
-.fixed-cost-table td small { display: block; color: #666; font-size: 11px; }
+.fixed-cost-table td small { display: block; color: #666; font-size: 11px; white-space: normal; min-width: 180px; max-width: 260px; margin-left: auto; }
 .fixed-cost-table input[type="text"] { width: 100%; }
+.fixed-cost-mode { display: flex; flex-direction: column; gap: 3px; }
+.fixed-cost-mode .check-label { font-size: 12px; }
+.fixed-cost-mode .check-label input, .budget-checklist input[type="checkbox"] { width: auto; min-width: 0; }
+.fixed-cost-mode label:has(input:disabled) { color: #999; }
 .expense-section h3 { margin: 6px 0; font-size: 15px; }
 .expense-section h3 .help { font-weight: normal; margin-left: 6px; }
 
@@ -485,13 +489,10 @@ table input[type="text"] { min-width: 150px; }
 /* 시행 전 데이터 보기 */
 .sheet-table th[scope="row"] { background: #f4f4f4; font-weight: normal; vertical-align: middle; }
 .sheet-table tfoot th, .sheet-table tfoot td,
-.proposal-table tfoot th, .proposal-table tfoot td,
-.proposal-assign-table tfoot th, .proposal-assign-table tfoot td { font-weight: bold; background: #f4f4f4; }
+.proposal-table tfoot th, .proposal-table tfoot td { font-weight: bold; background: #f4f4f4; }
 
 /* 품의 도우미 */
-.budget-status { margin: 0 0 10px; padding-left: 18px; line-height: 1.7; }
 .warn-text { color: #9a5b00; font-weight: bold; }
-.proposal-assign-table select { width: 100%; }
 .proposal-table th[scope="rowgroup"] { background: #f4f4f4; vertical-align: middle; white-space: normal; min-width: 120px; }
 .proposal-table .proposal-item { padding-left: 22px; color: #333; }
 .proposal-table .proposal-item small { color: #777; }
@@ -499,3 +500,35 @@ table input[type="text"] { min-width: 150px; }
 .proposal-table tbody.proposal-block { border-top: 2px solid #999; }
 .proposal-steps { margin: 0 0 8px; padding-left: 22px; line-height: 1.8; }
 .proposal-notes { margin: 0; padding-left: 18px; color: #444; line-height: 1.7; }
+
+.proposal-howto { border: 1px solid #b9cfe4; background: #f1f7fc; padding: 10px 14px; margin-bottom: 12px; }
+.proposal-howto ol { margin: 6px 0 0; padding-left: 20px; line-height: 1.7; }
+.proposal-progress { border: 1px solid #ccc; padding: 8px 12px; margin: 0 0 12px; }
+.proposal-progress p { margin: 0 0 6px; }
+.proposal-progress.done { border-color: #9cc59c; background: #f0f8f0; color: #075a07; font-weight: bold; }
+.proposal-progress.warn { border-color: #e2c48a; background: #fffaf0; }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.chip { border: 1px solid #d9c49a; background: #fff; padding: 2px 8px; border-radius: 12px; font-size: 12px; }
+.budget-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.budget-card { border: 1px solid #999; background: #fff; display: flex; flex-direction: column; }
+.budget-card.vulnerable { border-color: #8fb3d6; }
+.budget-card header { padding: 8px 12px; background: #f4f4f4; border-bottom: 1px solid #ccc; }
+.budget-card.vulnerable header { background: #eaf2fa; }
+.budget-card header h3 { margin: 0; font-size: 15px; }
+.budget-card header p { margin: 2px 0 0; color: #555; font-size: 12px; }
+.meter { height: 8px; background: #e6e6e6; margin: 10px 12px 0; }
+.meter span { display: block; height: 100%; background: #3d7ab8; }
+.budget-card-usage { margin: 4px 12px 6px; font-size: 12px; color: #444; }
+.budget-checklist { list-style: none; margin: 0; padding: 4px 12px; flex: 1; }
+.budget-checklist li { border-bottom: 1px dotted #ddd; padding: 4px 0; }
+.budget-checklist li:last-child { border-bottom: 0; }
+.budget-checklist label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.budget-checklist .item-name { flex: 1; }
+.budget-checklist .item-amount { color: #333; white-space: nowrap; }
+.budget-checklist li.checked .item-name, .budget-checklist li.checked .item-amount { font-weight: bold; }
+.budget-checklist li.disabled { color: #999; }
+.budget-checklist li.disabled label { cursor: default; }
+.budget-checklist .item-note { margin: 2px 0 0 22px; font-size: 12px; }
+.budget-card > .help { margin: 0 12px 6px; }
+.budget-card footer { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 12px; border-top: 1px solid #ddd; background: #fafafa; font-size: 13px; }
+.proposal-table tfoot tr.unassigned th, .proposal-table tfoot tr.unassigned td { color: #9a5b00; background: #fffaf0; }

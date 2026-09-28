@@ -7,155 +7,190 @@ import { number } from './utils.js';
 /**
  * 품의 도우미 계산.
  *
- * 비취약계층 학생 1인 비용을 예산 순서대로 채운다(교육청 → 기타 지원금 → 수익자 부담).
- * 한 예산의 1인당 한도를 넘는 항목은 한도까지만 넣고, 남은 금액을 다음 예산 맨 앞으로 넘긴다.
- *   예) 롯데월드 자유이용권 30,000원 → 교육청 13,500원 + 학교 자체지원금 16,500원
- * '지정 항목 전용' 예산은 직접 배정한 항목만 받고, 앞에서 넘어온 금액은 건너뛴다.
- * 마지막 수익자 부담은 한도가 없어 남은 금액을 모두 받는다.
+ * 예산 카드(교육청 취약/비취약, 기타 지원금, 수익자 부담)마다 사용자가 비용 항목을 체크해 넣는다.
+ * 체크한 순서대로 채우며, 예산의 1인당 한도를 넘으면 한도만큼만 넣고 나머지는 남겨 둔다.
+ *   예) 교육청(비취약) 남은 한도 13,500원에 롯데월드 자유이용권 30,000원을 넣으면
+ *       13,500원만 들어가고 16,500원이 남아 다른 예산에서 체크할 수 있다.
  *
- * 취약계층과 당일 불참 학생 몫은 교육청 지원금에서 따로 품의한다(엑셀 '예산별 품의 내용'과 같은 구성).
+ * 취약계층과 비취약계층은 학생 수가 다르므로 비용을 따로 센다(같은 항목이라도 각자 1인당 금액을 가진다).
+ * 당일 불참 학생의 공통비용(버스비·숙소비 등)은 교육청 지원금(비취약계층)에서 자동으로 품의한다.
+ * 취약계층에게 배정하지 않고 남은 금액은 수익자 부담으로 자동 처리한다.
  */
+export const VULNERABLE_BUDGET_ID = 'education-vulnerable';
 export const EDUCATION_BUDGET_ID = 'education';
 export const STUDENT_BUDGET_ID = 'student';
 
-export function proposalBudgets(project, regularParticipants) {
+export function proposalBudgets(project, counts) {
   const education = project.educationSupport ?? {};
   return [
     {
+      id: VULNERABLE_BUDGET_ID,
+      name: '교육청 지원금(취약계층)',
+      group: 'vulnerable',
+      count: counts.vulnerable,
+      capPerPerson: education.vulnerableMode === 'perPerson'
+        ? Math.max(0, number(education.vulnerablePerPerson))
+        : Number.POSITIVE_INFINITY
+    },
+    {
       id: EDUCATION_BUDGET_ID,
-      name: '교육청 지원금',
-      capPerPerson: Math.max(0, number(education.regularPerPerson)),
-      restricted: false
+      name: '교육청 지원금(비취약계층)',
+      group: 'regular',
+      count: counts.regular,
+      capPerPerson: Math.max(0, number(education.regularPerPerson))
     },
     ...(project.otherSupports ?? []).map(support => ({
       id: support.id,
-      name: support.name || '이름 없는 지원금',
-      capPerPerson: otherSupportPerPerson(support, regularParticipants),
-      restricted: Boolean(support.restricted)
+      name: `기타 지원금(${support.name || '이름 없음'})`,
+      group: 'regular',
+      count: counts.regular,
+      capPerPerson: otherSupportPerPerson(support, counts.regular)
     })),
-    { id: STUDENT_BUDGET_ID, name: '수익자 부담', capPerPerson: Number.POSITIVE_INFINITY, restricted: false }
+    { id: STUDENT_BUDGET_ID, name: '수익자 부담', group: 'regular', count: counts.regular, capPerPerson: Number.POSITIVE_INFINITY }
   ];
 }
 
-/** 저장된 순서대로 항목을 정렬한다. 새로 생긴 항목은 원래 순서대로 뒤에 붙는다. */
-export function orderLines(lines, order = []) {
-  const rank = new Map(order.map((id, index) => [id, index]));
+/** 체크한 순서대로 예산을 채운다. */
+function replay(budgets, lines, allocations) {
+  const budgetById = new Map(budgets.map(budget => [budget.id, budget]));
+  const lineById = new Map(lines.map(line => [line.id, line]));
+  const remaining = {
+    vulnerable: new Map(lines.map(line => [line.id, line.perPerson])),
+    regular: new Map(lines.map(line => [line.id, line.perPerson]))
+  };
+  const used = new Map(budgets.map(budget => [budget.id, 0]));
+
+  const results = allocations
+    .filter(item => budgetById.has(item.budgetId) && lineById.has(item.lineId))
+    .map(item => {
+      const budget = budgetById.get(item.budgetId);
+      const line = lineById.get(item.lineId);
+      const pool = remaining[budget.group];
+      const requested = pool.get(line.id);
+      const room = budget.capPerPerson - used.get(budget.id);
+      const perPerson = Math.max(0, Math.min(requested, room));
+      pool.set(line.id, requested - perPerson);
+      used.set(budget.id, used.get(budget.id) + perPerson);
+      return {
+        budgetId: budget.id,
+        lineId: line.id,
+        name: line.name,
+        date: line.date,
+        requested,
+        perPerson,
+        left: requested - perPerson,
+        overBudget: perPerson < requested,
+        // 다른 예산에 먼저 일부를 넣고 남은 금액을 넣은 경우
+        remainder: requested < line.perPerson
+      };
+    });
+  return { results, remaining, used };
+}
+
+function unassignedLines(lines, pool) {
   return lines
-    .map((line, index) => ({ line, key: rank.has(line.id) ? rank.get(line.id) : order.length + index }))
-    .sort((left, right) => left.key - right.key)
-    .map(item => item.line);
+    .filter(line => pool.get(line.id) > 0)
+    .map(line => ({ lineId: line.id, name: line.name, date: line.date, perPerson: pool.get(line.id), full: pool.get(line.id) === line.perPerson }));
 }
 
-function assignedBudgetId(line, plan, budgetIds) {
-  const budgetId = plan.assignments[line.id];
-  return budgetIds.has(budgetId) ? budgetId : STUDENT_BUDGET_ID;
-}
-
-function fillBudgets(budgets, lines, plan) {
-  const budgetIds = new Set(budgets.map(budget => budget.id));
-  const assignedTo = budgetId => lines
-    .filter(line => assignedBudgetId(line, plan, budgetIds) === budgetId)
-    .map(line => ({ line, amount: line.perPerson, carried: false }));
-
-  let carry = [];
-  return budgets.map(budget => {
-    const queue = budget.restricted ? assignedTo(budget.id) : [...carry, ...assignedTo(budget.id)];
-    let remaining = budget.capPerPerson;
-    const parts = [];
-    const overflow = [];
-    for (const piece of queue) {
-      const take = Math.min(piece.amount, remaining);
-      if (take > 0) {
-        parts.push({ lineId: piece.line.id, name: piece.line.name, date: piece.line.date, perPerson: take, carried: piece.carried });
-        remaining -= take;
-      }
-      if (piece.amount > take) overflow.push({ line: piece.line, amount: piece.amount - take, carried: true });
-    }
-    carry = budget.restricted ? [...carry, ...overflow] : overflow;
-    const usedPerPerson = parts.reduce((sum, part) => sum + part.perPerson, 0);
-    return {
-      budget,
-      parts,
-      usedPerPerson,
-      unusedPerPerson: Number.isFinite(budget.capPerPerson) ? budget.capPerPerson - usedPerPerson : 0
-    };
-  });
-}
-
-function findSplits(blocks) {
-  const pieces = new Map();
-  for (const block of blocks) {
-    for (const part of block.parts) {
-      if (!pieces.has(part.lineId)) pieces.set(part.lineId, { name: part.name, pieces: [] });
-      pieces.get(part.lineId).pieces.push({ budgetName: block.budget.name, perPerson: part.perPerson });
-    }
+function findSplits(results, budgets) {
+  const nameOf = new Map(budgets.map(budget => [budget.id, budget.name]));
+  const regular = new Set(budgets.filter(budget => budget.group === 'regular').map(budget => budget.id));
+  const byLine = new Map();
+  for (const result of results) {
+    if (!regular.has(result.budgetId) || result.perPerson <= 0) continue;
+    if (!byLine.has(result.lineId)) byLine.set(result.lineId, { name: result.name, pieces: [] });
+    byLine.get(result.lineId).pieces.push({ budgetName: nameOf.get(result.budgetId), perPerson: result.perPerson });
   }
-  return [...pieces.values()].filter(item => item.pieces.length > 1);
+  return [...byLine.values()].filter(item => item.pieces.length > 1);
 }
 
 export function buildProposal(project) {
   const plan = normalizeProposalPlan(project.proposalPlan);
-  const counts = projectCounts(project);
-  const regularCount = counts.regularParticipants;
-  const vulnerableCount = counts.vulnerableParticipants;
-  const dayAbsentCount = counts.contractedAbsent;
+  const c = projectCounts(project);
+  const counts = { regular: c.regularParticipants, vulnerable: c.vulnerableParticipants, dayAbsent: c.contractedAbsent };
+  const lines = studentCostLines(project);
+  const budgets = proposalBudgets(project, counts);
+  const { results, remaining, used } = replay(budgets, lines, plan.allocations);
 
-  const lines = orderLines(studentCostLines(project), plan.order);
-  const budgets = proposalBudgets(project, regularCount);
-  const perPersonTotal = sumLines(lines, 'perPerson');
+  const blocks = budgets.map(budget => {
+    const usedPerPerson = used.get(budget.id);
+    const parts = results
+      .filter(result => result.budgetId === budget.id)
+      .map(result => ({ ...result, total: result.perPerson * budget.count }));
+    return {
+      budget,
+      parts,
+      usedPerPerson,
+      unusedPerPerson: Number.isFinite(budget.capPerPerson) ? budget.capPerPerson - usedPerPerson : null,
+      total: usedPerPerson * budget.count
+    };
+  });
 
-  const education = project.educationSupport ?? {};
-  const vulnerableEducationPerPerson = education.vulnerableMode === 'perPerson'
-    ? Math.min(perPersonTotal, Math.max(0, number(education.vulnerablePerPerson)))
-    : perPersonTotal;
-  const vulnerable = {
-    count: vulnerableCount,
-    perPerson: vulnerableEducationPerPerson,
-    total: vulnerableEducationPerPerson * vulnerableCount,
-    burdenPerPerson: perPersonTotal - vulnerableEducationPerPerson,
-    burdenTotal: (perPersonTotal - vulnerableEducationPerPerson) * vulnerableCount
-  };
-
-  const dayAbsent = dayAbsentCount > 0
+  const dayAbsent = counts.dayAbsent > 0
     ? lines.filter(line => line.includesDayAbsent).map(line => ({
-      lineId: line.id, name: line.name, count: dayAbsentCount, perPerson: line.perPerson, total: line.perPerson * dayAbsentCount
+      lineId: line.id, name: line.name, count: counts.dayAbsent, perPerson: line.perPerson, total: line.perPerson * counts.dayAbsent
     }))
     : [];
   const dayAbsentTotal = dayAbsent.reduce((sum, row) => sum + row.total, 0);
 
-  const blocks = fillBudgets(budgets, lines, plan).map(block => ({
-    ...block,
-    count: regularCount,
-    total: block.usedPerPerson * regularCount,
-    parts: block.parts.map(part => ({ ...part, total: part.perPerson * regularCount }))
-  }));
+  const unassigned = {
+    vulnerable: unassignedLines(lines, remaining.vulnerable),
+    regular: unassignedLines(lines, remaining.regular)
+  };
+  const vulnerableBurdenPerPerson = sumLines(unassigned.vulnerable, 'perPerson');
+  const vulnerableBurden = {
+    count: counts.vulnerable,
+    perPerson: vulnerableBurdenPerPerson,
+    total: vulnerableBurdenPerPerson * counts.vulnerable
+  };
+  const regularUnassignedPerPerson = sumLines(unassigned.regular, 'perPerson');
 
-  const educationBlock = blocks.find(block => block.budget.id === EDUCATION_BUDGET_ID);
-  const educationTotal = vulnerable.total + educationBlock.total + dayAbsentTotal;
+  const blockTotal = id => blocks.find(block => block.budget.id === id).total;
+  const educationTotal = blockTotal(VULNERABLE_BUDGET_ID) + blockTotal(EDUCATION_BUDGET_ID) + dayAbsentTotal;
+  const education = project.educationSupport ?? {};
   const grantTotal = education.grantTotal === null || education.grantTotal === undefined || education.grantTotal === ''
     ? null : number(education.grantTotal);
 
-  const costTotal = sumLines(lines, 'total');
-  const proposalTotal = vulnerable.total + vulnerable.burdenTotal + dayAbsentTotal
-    + blocks.reduce((sum, block) => sum + block.total, 0);
+  const assignedTotal = blocks.reduce((sum, block) => sum + block.total, 0) + dayAbsentTotal + vulnerableBurden.total;
+  const unassignedTotal = regularUnassignedPerPerson * counts.regular;
 
   return {
     lines,
     budgets,
-    assignments: Object.fromEntries(lines.map(line => [line.id, assignedBudgetId(line, plan, new Set(budgets.map(b => b.id)))])),
-    counts: { regular: regularCount, vulnerable: vulnerableCount, dayAbsent: dayAbsentCount },
-    perPersonTotal,
-    vulnerable,
+    counts,
+    results,
+    blocks,
     dayAbsent,
     dayAbsentTotal,
-    blocks,
-    splits: findSplits(blocks),
-    education: {
-      total: educationTotal,
-      grantTotal,
-      balance: grantTotal === null ? null : grantTotal - educationTotal
-    },
-    costTotal,
-    proposalTotal
+    unassigned,
+    vulnerableBurden,
+    regularUnassignedPerPerson,
+    splits: findSplits(results, budgets),
+    perPersonTotal: sumLines(lines, 'perPerson'),
+    education: { total: educationTotal, grantTotal, balance: grantTotal === null ? null : grantTotal - educationTotal },
+    assignedTotal,
+    unassignedTotal,
+    costTotal: sumLines(lines, 'total')
   };
+}
+
+/** 한 예산에서 각 항목의 상태(체크 여부, 넣은 금액, 넣을 수 있는 금액). 예산 카드를 그릴 때 쓴다. */
+export function budgetChecklist(proposal, budgetId) {
+  const budget = proposal.budgets.find(item => item.id === budgetId);
+  const pool = budget.group === 'vulnerable' ? proposal.unassigned.vulnerable : proposal.unassigned.regular;
+  const available = new Map(pool.map(item => [item.lineId, item.perPerson]));
+  return proposal.lines.map(line => {
+    const result = proposal.results.find(item => item.budgetId === budgetId && item.lineId === line.id) ?? null;
+    return {
+      line,
+      checked: Boolean(result),
+      result,
+      available: available.get(line.id) ?? 0
+    };
+  });
+}
+
+export function findAllocationResult(proposal, budgetId, lineId) {
+  return proposal.results.find(item => item.budgetId === budgetId && item.lineId === lineId) ?? null;
 }

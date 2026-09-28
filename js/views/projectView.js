@@ -8,7 +8,7 @@ import { renderExpenseSections } from './project/expenseSections.js';
 import { readFixedCostInputs } from './project/fixedCostSection.js';
 import { headcountAttendance, readHeadcountInputs, renderHeadcountSection } from './project/headcountSection.js';
 import { renderPreTripSection } from './project/preTripSection.js';
-import { readProposalInputs, renderProposalSection } from './project/proposalSection.js';
+import { renderProposalSection } from './project/proposalSection.js';
 import { renderReportSection } from './project/reportSection.js';
 import { renderSettlementSection } from './project/settlementSection.js';
 import { renderTripScheduleSection } from './project/tripScheduleSection.js';
@@ -72,9 +72,6 @@ export function readProjectForm(form, previous) {
 
   const budget = readBudgetInputs(form, data, previous);
   if (budget) Object.assign(next, budget);
-
-  const proposal = readProposalInputs(form);
-  if (proposal) next.proposalPlan = proposal;
 
   const studentTbody = form.querySelector('#studentExpenseTableBody');
   if (studentTbody) next.expenses = readExpenseRows(studentTbody, previous.expenses);
