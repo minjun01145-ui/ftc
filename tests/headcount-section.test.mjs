@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createProject } from '../js/presets.js';
+import { calculateExpenses } from '../js/engine.js';
+import { createExpense, createProject } from '../js/presets.js';
 import { tripScheduleDateRange } from '../js/tripSchedule.js';
 import { gradeStudentCount, headcountIssues, renderHeadcountSection } from '../js/views/project/headcountSection.js';
 import { readProjectForm } from '../js/views/projectView.js';
@@ -51,6 +52,27 @@ test('실제 참여 인원과 취약계층 인원을 인원 흐름에 반영한�
   assert.deepEqual(summary.issues, []);
   assert.equal(next.actualParticipants, 68);
   assert.equal(next.absentStudents, 3);
+});
+
+test('당일 불참자는 1인당 금액에서 빠지고 학생 총액에는 포함된다', () => {
+  const project = createProject();
+  const form = fakeForm({
+    grade: '2', totalStudents: '71', actualParticipants: '68', dayAbsentStudents: '2',
+    vulnerableParticipants: '12', dayAbsentSharesCommonCost: 'on'
+  });
+  const next = readProjectForm(form, project);
+  next.expenses = [
+    { ...createExpense({ id: 'per' }), unitAmount: 1000, quantityBase: 'participants' },
+    { ...createExpense({ id: 'total' }), unitAmount: 1000, quantityBase: 'participantsPlusAbsent' }
+  ];
+  const rows = calculateExpenses(next).rows;
+
+  assert.equal(next.dayAbsentSharesCommonCost, true);
+  assert.equal(next.actualParticipants, 68);
+  assert.equal(rows.find(row => row.id === 'per').studentTotal, 68_000);
+  assert.equal(rows.find(row => row.id === 'total').studentTotal, 70_000);
+  assert.deepEqual(headcountIssues({ totalStudents: 71, participants: 70, dayAbsent: 2, vulnerableParticipants: 0 }).length, 1);
+  assert.doesNotMatch(renderHeadcountSection(next, school), /실제 참여 학생 중 취약계층은/);
 });
 
 test('참여 인원이 학년 학생수나 참여자보다 많으면 저장하지 않는다', () => {

@@ -1,20 +1,21 @@
 import { renderExpenseRows } from '../expenseTable.js';
+import { renderFixedCostSummary } from './fixedCostSection.js';
 
 export function renderStudentExpenseSection(project) {
   return `
     <fieldset class="section-fieldset expense-section" data-expense-section="student" data-project-section="expenses">
       <legend>체험처/비용(학생용)</legend>
       <button type="button" class="section-save" data-action="save-student-expenses">저장</button>
+      ${renderFixedCostSummary(project)}
+      <h3>체험처</h3>
+      <p class="help">1인당 금액은 실제 참여 학생 수 × 단가, 학생 총액은 당일 불참자까지 포함한 학생 수 × 단가로 계산합니다.</p>
       <div class="toolbar">
         <button type="button" data-action="add-expense" data-expense-kind="student">항목 추가</button>
       </div>
       <div class="table-wrap">
-        <table>
+        <table class="compact-table">
           <thead>
-            <tr>
-              <th>순서</th><th>일자</th><th>체험처/항목</th><th>계산방법</th><th>대상인원</th><th>직접수량</th><th>단가/총액</th>
-              <th>학생 계획액</th><th>공통비 중 인솔자 몫</th><th>실제 지출액</th><th>학생 정산액</th><th>관리</th>
-            </tr>
+            <tr><th>순서</th><th>일자</th><th>체험처/항목</th><th>계산방법</th><th>단가</th><th>삭제</th></tr>
           </thead>
           <tbody id="studentExpenseTableBody" data-expense-table="student">${renderExpenseRows(project.expenses, project, { kind: 'student' })}</tbody>
         </table>
@@ -37,7 +38,7 @@ export function renderStaffExpenseSection(project) {
           <thead>
             <tr>
               <th>순서</th><th>일자</th><th>체험처/항목</th><th>계산방법</th><th>대상 기준</th><th>직접수량</th><th>단가/총액</th>
-              <th>인솔자 계획액</th><th>실제 지출액</th><th>인솔자 정산액</th><th>관리</th>
+              <th>인솔자 계획액</th><th>실제 지출액</th><th>인솔자 정산액</th><th>삭제</th>
             </tr>
           </thead>
           <tbody id="staffExpenseTableBody" data-expense-table="staff">${renderExpenseRows(expenses, project, { kind: 'staff' })}</tbody>

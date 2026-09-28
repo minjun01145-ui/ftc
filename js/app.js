@@ -4,35 +4,26 @@ import { buildProposalLines, calculateWorkflow, createConfirmedPlanSnapshot, sum
 import { downloadWorkflowWorkbook } from './services/workbookExport.js';
 import { getSchoolStudentCounts, searchSchools } from './services/schoolInfo.js';
 import { createSchoolStudentLookup } from './services/schoolStudentLookup.js';
-import { scheduleUploadErrorMessage, validateScheduleFiles } from './services/scheduleUpload.js';
 import { createScheduleDocumentImportService } from './services/scheduleDocumentImport.js';
+import { createKakaoPlaceSearch } from './services/kakaoPlaces.js';
+import { KAKAO_JAVASCRIPT_KEY } from './config/kakaoConfig.js';
 import { createDefaultAiClient } from './ai/createDefaultAiClient.js';
+import { createTripScheduleController } from './controllers/tripScheduleController.js';
 import { getState, persistState, replaceState, updateState } from './state.js';
-import { syncExpensesFromTripSchedule, tripScheduleDateRange } from './tripSchedule.js';
 import { downloadJson, escapeHtml, number } from './utils.js';
 import {
   addExpenseRow,
   cloneExpensesForStaff,
-  moveExpenseGroup,
+  moveExpenseRow,
   readExpenseRows,
-  removeExpenseGroup,
+  removeExpenseRow,
   replaceExpenseRows,
-  syncExpenseDetailAvailability,
   toggleCustomQuantity,
-  toggleExpenseDetailEditor,
-  toggleExpenseDetailView,
   updateExpenseRowButtons
 } from './views/expenseTable.js';
 import { readProjectForm, renderProjectPage } from './views/projectView.js';
 import { newAdminRowHtml, newManualRowHtml, newSourceRowHtml, readWorkflowForm } from './views/project/workflowSection.js';
 import { gradeStudentCount, headcountIssues } from './views/project/headcountSection.js';
-import {
-  newTripScheduleRowHtml,
-  readTripScheduleSection,
-  replaceTripScheduleDraft,
-  setTripScheduleEditing,
-  setTripScheduleUploadStatus
-} from './views/project/tripScheduleSection.js';
 import { renderProjectList } from './views/sidebarView.js';
 import { readSchoolForm, renderSchoolPage } from './views/schoolView.js';
 
@@ -48,9 +39,31 @@ let currentPage = { type: 'school', projectId: null, section: null };
 let dirty = false;
 let messageTimer;
 let schoolSearchRequestId = 0;
-let scheduleDocumentRequestId = 0;
-const scheduleDocumentImport = createScheduleDocumentImportService({ aiClient: createDefaultAiClient() });
 const schoolStudentLookup = createSchoolStudentLookup(getSchoolStudentCounts);
+
+function currentProject() {
+  return getState().projects.find(item => item.id === currentPage.projectId) ?? null;
+}
+
+function replaceCurrentProject(nextProject) {
+  updateState(next => {
+    const index = next.projects.findIndex(item => item.id === currentPage.projectId);
+    if (index >= 0) next.projects[index] = nextProject;
+  });
+  persistState();
+  render();
+}
+
+const tripSchedule = createTripScheduleController({
+  documentImport: createScheduleDocumentImportService({ aiClient: createDefaultAiClient() }),
+  placeSearch: createKakaoPlaceSearch({ javascriptKey: KAKAO_JAVASCRIPT_KEY }),
+  getProject: currentProject,
+  getSchoolYear: () => getState().school.schoolYear,
+  saveProject: replaceCurrentProject,
+  isFormAttached: form => main.contains(form),
+  markDirty: () => { dirty = true; },
+  showMessage
+});
 
 function projectPage(projectId, section = PROJECT_SECTION.BUSINESS) {
   return { type: 'project', projectId, section: normalizeProjectSection(section) };
@@ -247,7 +260,8 @@ function saveProject(form, messageText = '저장했습니다.') {
     const attendance = nextProject.workflow?.attendance ?? {};
     const issues = headcountIssues({
       totalStudents: nextProject.totalStudents,
-      participants: attendance.applicants,
+      participants: attendance.applicants - attendance.regularDayAbsent,
+      dayAbsent: attendance.regularDayAbsent,
       vulnerableParticipants: attendance.vulnerableEnrolled
     });
     if (issues.length) {
@@ -321,88 +335,6 @@ function confirmWorkflowPlan(form) {
   persistState();
   render();
   showMessage(`품의용 확정 계획 ${revision}차를 저장했습니다. 이전 확정본도 보존했습니다.`);
-}
-
-function saveTripSchedule(form) {
-  const state = getState();
-  const project = state.projects.find(item => item.id === currentPage.projectId);
-  const section = form.querySelector('[data-trip-schedule-section]');
-  if (!project || !section) return;
-
-  const tripSchedule = readTripScheduleSection(section, project.tripSchedule);
-  const expenses = syncExpensesFromTripSchedule(tripSchedule, project.expenses);
-  const startDate = form.elements.startDate?.value ?? project.startDate;
-  const endDate = form.elements.endDate?.value ?? project.endDate;
-  updateState(next => {
-    const index = next.projects.findIndex(item => item.id === currentPage.projectId);
-    if (index < 0) return;
-    next.projects[index] = {
-      ...next.projects[index],
-      startDate,
-      endDate,
-      tripSchedule,
-      expenses
-    };
-  });
-  persistState();
-  render();
-  showMessage('체험학습 일정을 저장하고 체험처/비용에 반영했습니다.');
-}
-
-async function importTripScheduleDocument(input) {
-  const section = input.closest('[data-trip-schedule-section]');
-  const form = input.form;
-  const requestId = ++scheduleDocumentRequestId;
-  const validation = validateScheduleFiles(input.files);
-  if (validation.error) {
-    setTripScheduleUploadStatus(input, scheduleUploadErrorMessage(validation.error), { error: true });
-    input.value = '';
-    return;
-  }
-
-  const [file] = validation.accepted;
-  const project = getState().projects.find(item => item.id === currentPage.projectId);
-  if (!project || !section || !form) {
-    input.value = '';
-    return;
-  }
-
-  input.disabled = true;
-  setTripScheduleUploadStatus(input, '분석 중...');
-  try {
-    const items = await scheduleDocumentImport.importFile(file, {
-      projectTitle: project.title,
-      schoolYear: getState().school.schoolYear,
-      startDate: project.startDate,
-      endDate: project.endDate
-    });
-    if (!main.contains(form) || requestId !== scheduleDocumentRequestId) return;
-    if (!items.length) {
-      setTripScheduleUploadStatus(input, '일정 항목을 찾지 못했습니다. 기존 일정은 그대로입니다.');
-      return;
-    }
-    if (!replaceTripScheduleDraft(section, items)) {
-      setTripScheduleUploadStatus(input, '일정 초안을 만들지 못했습니다. 기존 일정은 그대로입니다.', { error: true });
-      return;
-    }
-    dirty = true;
-    const range = tripScheduleDateRange(items);
-    if (range) {
-      if (form.elements.startDate) form.elements.startDate.value = range.startDate;
-      if (form.elements.endDate) form.elements.endDate.value = range.endDate;
-    }
-    const rangeText = range ? ` 기간(${range.startDate} ~ ${range.endDate})도 입력했습니다.` : '';
-    setTripScheduleUploadStatus(input, `${items.length}개 일정을 초안으로 가져왔습니다.${rangeText} 확인한 뒤 저장해 주세요.`);
-  } catch (error) {
-    if (!main.contains(form) || requestId !== scheduleDocumentRequestId) return;
-    const messageText = ['AI_NOT_CONFIGURED', 'AI_MODEL_NOT_CONFIGURED'].includes(error.code)
-      ? '문서 일정 가져오기가 설정되지 않았습니다.'
-      : error.message || '문서에서 일정을 읽지 못했습니다.';
-    setTripScheduleUploadStatus(input, messageText, { error: true });
-  } finally {
-    input.value = '';
-    input.disabled = false;
-  }
 }
 
 function goTo(page) {
@@ -484,11 +416,6 @@ main.addEventListener('input', event => {
     schoolStudentLookup.invalidate();
     setSchoolStatus(target.form, '학년도를 바꿨습니다. 학교를 다시 선택하면 학생수를 조회합니다.');
   }
-  if (target.dataset.detailField !== undefined) {
-    const editor = target.closest('[data-expense-detail-editor]');
-    const tbody = target.closest('tbody');
-    if (editor && tbody) syncExpenseDetailAvailability(tbody, editor.dataset.expenseDetailEditor);
-  }
   if (target.matches('[data-cost-field="quantityBase"]')) {
     const row = target.closest('[data-cost-row]');
     const direct = row?.nextElementSibling;
@@ -502,7 +429,7 @@ main.addEventListener('change', event => {
   const target = event.target;
 
   if (target.matches('[data-trip-schedule-upload]')) {
-    void importTripScheduleDocument(target);
+    void tripSchedule.importDocument(target);
     return;
   }
   if (target.matches('[data-school-search]')) return;
@@ -583,23 +510,22 @@ main.addEventListener('click', event => {
   }
 
   if (action === 'edit-trip-schedule') {
-    setTripScheduleEditing(button.closest('[data-trip-schedule-section]'), true);
+    tripSchedule.startEditing(button);
     return;
   }
 
   if (action === 'add-schedule-item') {
-    const section = button.closest('[data-trip-schedule-section]');
-    const tbody = section?.querySelector('tbody');
-    if (!tbody) return;
-    tbody.querySelector('[data-trip-schedule-empty]')?.remove();
-    tbody.insertAdjacentHTML('beforeend', newTripScheduleRowHtml());
-    setTripScheduleEditing(section, true);
-    dirty = true;
+    tripSchedule.addRow(button);
+    return;
+  }
+
+  if (action === 'search-schedule-place') {
+    void tripSchedule.searchPlace(button);
     return;
   }
 
   if (action === 'save-trip-schedule' && form) {
-    saveTripSchedule(form);
+    tripSchedule.save(form);
     return;
   }
 
@@ -691,6 +617,7 @@ main.addEventListener('click', event => {
 
   const saveActions = {
     'save-business': '사업정보를 저장했습니다.',
+    'save-fixed-costs': '고정비를 저장했습니다.',
     'save-headcount': '인원 정보를 저장했습니다.',
     'save-budget': '예산 정보를 저장했습니다.',
     'save-student-expenses': '학생용 체험처/비용을 저장했습니다.',
@@ -730,30 +657,14 @@ main.addEventListener('click', event => {
   }
 
   if (action === 'delete-expense' && tbody && expenseId) {
-    removeExpenseGroup(tbody, expenseId);
+    removeExpenseRow(tbody, expenseId);
     dirty = true;
     return;
   }
 
   if ((action === 'move-expense-up' || action === 'move-expense-down') && tbody && expenseId) {
-    moveExpenseGroup(tbody, expenseId, action === 'move-expense-up' ? 'up' : 'down');
+    moveExpenseRow(tbody, expenseId, action === 'move-expense-up' ? 'up' : 'down');
     dirty = true;
-    return;
-  }
-
-  if (action === 'edit-expense-details' && tbody && expenseId) {
-    toggleExpenseDetailEditor(tbody, expenseId);
-    return;
-  }
-
-  if (action === 'close-detail-editor') {
-    const detailTbody = button.closest('tbody');
-    if (detailTbody && expenseId) toggleExpenseDetailEditor(detailTbody, expenseId, true);
-    return;
-  }
-
-  if (action === 'toggle-expense-details' && tbody && expenseId) {
-    toggleExpenseDetailView(tbody, expenseId);
     return;
   }
 

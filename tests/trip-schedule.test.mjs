@@ -23,7 +23,7 @@ test('기존 저장 데이터에는 빈 체험학습 일정 모델을 보완한�
   });
 
   assert.equal(state.schemaVersion, 6);
-  assert.deepEqual(state.projects[0].tripSchedule, { items: [] });
+  assert.deepEqual(state.projects[0].tripSchedule, { items: [], importedFrom: null });
   assert.equal(state.projects[0].expenses[0].sourceScheduleItemId, null);
 });
 

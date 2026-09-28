@@ -4,7 +4,8 @@ import { readExpenseRows } from './expenseTable.js';
 import { renderBudgetSection } from './project/budgetSection.js';
 import { renderBusinessInfoSection } from './project/businessInfoSection.js';
 import { renderExpenseSections } from './project/expenseSections.js';
-import { renderHeadcountSection } from './project/headcountSection.js';
+import { renderFixedCostInputSection, readFixedCostInputs } from './project/fixedCostSection.js';
+import { headcountAttendance, readHeadcountInputs, renderHeadcountSection } from './project/headcountSection.js';
 import { renderReportSection } from './project/reportSection.js';
 import { renderSettlementSection } from './project/settlementSection.js';
 import { renderTripScheduleSection } from './project/tripScheduleSection.js';
@@ -12,7 +13,7 @@ import { createFundingSource } from '../presets.js';
 import { summarizeAttendance } from '../workflowEngine.js';
 
 function renderBusinessSections(project, school) {
-  return `${renderBusinessInfoSection(project, school)}${renderTripScheduleSection(project)}`;
+  return `${renderBusinessInfoSection(project, school)}${renderTripScheduleSection(project)}${renderFixedCostInputSection(project)}`;
 }
 
 function renderOverview(project, school) {
@@ -62,33 +63,12 @@ function has(data, name) {
   return data.has(name);
 }
 
-function countInput(value) {
-  const text = String(value ?? '').trim();
-  return text === '' ? 0 : Number(text);
-}
-
-// 인원 화면은 실제 참여자와 그 중 취약계층만 받으므로 불참·미신청 단계는 0으로 둡니다.
-function headcountAttendance(previousAttendance, previousTotal, { participants, vulnerableParticipants }) {
-  const legacy = previousAttendance.schema === 'legacy-v5' || previousAttendance.legacyAttendance
-    ? { legacyAttendance: previousAttendance.legacyAttendance ?? previousAttendance }
-    : {};
-  return {
-    schema: 'core-v1',
-    applicants: participants,
-    chaperones: summarizeAttendance(previousAttendance, previousTotal).chaperones,
-    vulnerableEnrolled: vulnerableParticipants,
-    vulnerableNotApplied: 0,
-    vulnerableDayAbsent: 0,
-    regularDayAbsent: 0,
-    ...legacy
-  };
-}
-
 export function readProjectForm(form, previous) {
   const data = new FormData(form);
   const next = { ...previous };
 
   if (has(data, 'title')) next.title = String(data.get('title') ?? '').trim();
+  next.fixedCosts = readFixedCostInputs(data, previous.fixedCosts);
   if (has(data, 'startDate')) next.startDate = String(data.get('startDate') ?? '');
   if (has(data, 'endDate')) next.endDate = String(data.get('endDate') ?? '');
   if (has(data, 'grade')) next.grade = data.get('grade') ? number(data.get('grade')) : '';
@@ -99,18 +79,21 @@ export function readProjectForm(form, previous) {
   if (has(data, 'totalStudents')) {
     const rawTotal = String(data.get('totalStudents') ?? '');
     next.totalStudents = rawTotal === '' ? 0 : Number(rawTotal);
-    if (has(data, 'actualParticipants')) {
+    const headcount = readHeadcountInputs(data);
+    if (headcount) {
+      next.dayAbsentSharesCommonCost = headcount.dayAbsentSharesCommonCost;
       next.workflow = {
         ...next.workflow,
-        attendance: headcountAttendance(next.workflow?.attendance ?? {}, previous.totalStudents, {
-          participants: countInput(data.get('actualParticipants')),
-          vulnerableParticipants: countInput(data.get('vulnerableParticipants'))
-        })
+        attendance: headcountAttendance(next.workflow?.attendance ?? {}, previous.totalStudents, headcount)
       };
     }
     const summary = summarizeAttendance(next.workflow?.attendance ?? {}, next.totalStudents);
     next.actualParticipants = summary.participants;
     next.absentStudents = Math.max(0, summary.enrolled - summary.participants);
+    // 당일 불참자는 계약 후 불참이므로 '학생 총액' 항목의 수량(참여 + 당일 불참)에 들어간다.
+    next.contractedAbsentStudents = summary.vulnerableAbsent + summary.regularAbsent;
+    next.vulnerableContractedAbsent = summary.vulnerableAbsent;
+    next.regularContractedAbsent = summary.regularAbsent;
     next.vulnerableStudents = summary.vulnerableEnrolled;
     next.vulnerableParticipants = summary.vulnerableParticipants;
     next.vulnerableAbsent = summary.vulnerableAbsent;

@@ -84,6 +84,8 @@ fieldset {
   border: 1px solid #999;
   padding: 12px;
   margin: 0 0 14px;
+  /* 기본값(min-content)이면 넓은 표가 화면 전체를 밀어내므로, 표는 .table-wrap 안에서 스크롤한다. */
+  min-width: 0;
 }
 legend { padding: 0 5px; font-weight: bold; }
 .form-grid {
@@ -164,6 +166,7 @@ button.danger { color: #8b0000; }
 
 .table-wrap { overflow-x: auto; border: 1px solid #999; }
 table { width: 100%; border-collapse: collapse; min-width: 960px; }
+table.compact-table { min-width: 640px; }
 th, td {
   border-right: 1px solid #bbb;
   border-bottom: 1px solid #bbb;
@@ -278,46 +281,44 @@ table input[type="text"] { min-width: 150px; }
 
 .expense-guide p { margin: 2px 0; }
 .expense-actions {
-  min-width: 210px;
-  white-space: normal;
+  white-space: nowrap;
   text-align: center;
 }
 .expense-actions button { margin: 1px; }
-.expense-detail-editor td,
-.expense-detail-view td {
-  background: #f7f7f7;
-  white-space: normal;
-  padding: 9px 10px;
-}
-.detail-editor-grid {
+
+.fixed-cost-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(260px, 1fr));
-  gap: 8px 14px;
-}
-.detail-editor-grid label {
-  display: grid;
-  grid-template-columns: 95px minmax(140px, 1fr);
-  gap: 6px;
+  grid-template-columns: 150px minmax(260px, 420px);
+  gap: 8px 10px;
   align-items: center;
 }
-.detail-editor-grid input { width: 100%; }
-.detail-editor-actions { margin-top: 8px; text-align: right; }
-.detail-view-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(260px, 1fr));
-  gap: 6px 18px;
-  line-height: 1.6;
-}
-.detail-view-grid strong {
-  display: inline-block;
-  min-width: 95px;
-  font-weight: normal;
-  color: #444;
-}
+.fixed-cost-grid > label { text-align: right; }
+.fixed-cost-input { display: flex; align-items: center; gap: 6px; }
+.fixed-cost-input input { flex: 1; min-width: 0; }
+.fixed-cost-mode { min-width: 104px; color: #444; }
+.fixed-cost-input select { min-width: 104px; }
+.fixed-cost-summary { margin-bottom: 14px; }
+.expense-section h3 { margin: 6px 0; font-size: 15px; }
+.expense-section h3 .help { font-weight: normal; margin-left: 6px; }
+
+.checkbox-label { display: flex; align-items: center; justify-content: flex-end; gap: 5px; }
+.schedule-source { margin: 0 0 8px; color: #075a07; font-size: 13px; }
+.address-cell { display: flex; gap: 4px; }
+.address-cell input { flex: 1; min-width: 0; }
+
+.place-search-dialog { width: min(560px, calc(100vw - 32px)); border: 1px solid #888; padding: 14px 16px; }
+.place-search-dialog h2 { margin: 0 0 10px; font-size: 17px; }
+.place-search-controls { display: flex; gap: 6px; }
+.place-search-controls input { flex: 1; min-width: 0; }
+.place-search-results { list-style: none; margin: 8px 0; padding: 0; max-height: 50vh; overflow-y: auto; display: grid; gap: 4px; }
+.place-search-result { display: flex; flex-direction: column; align-items: flex-start; width: 100%; text-align: left; gap: 2px; }
+.place-search-result small { color: #555; }
+.place-search-actions { text-align: right; }
 
 @media (max-width: 900px) {
-  .detail-editor-grid,
-  .detail-view-grid { grid-template-columns: 1fr; }
+  .fixed-cost-grid { grid-template-columns: 1fr; }
+  .fixed-cost-grid > label { text-align: left; }
+  .checkbox-label { justify-content: flex-start; }
 }
 
 .project-group { border-bottom: 1px solid #d4d4d4; }

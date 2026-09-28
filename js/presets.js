@@ -1,3 +1,4 @@
+import { createFixedCosts, normalizeFixedCosts } from './fixedCosts.js';
 import { clone, number, uid } from './utils.js';
 
 export function createExpense(overrides = {}) {
@@ -122,8 +123,11 @@ export function createProject(title = '새 사업') {
     startDate: '',
     endDate: '',
     tripSchedule: {
-      items: []
+      items: [],
+      importedFrom: null
     },
+    fixedCosts: createFixedCosts(),
+    dayAbsentSharesCommonCost: false,
     totalStudents: 0,
     actualParticipants: 0,
     absentStudents: 0,
@@ -387,10 +391,18 @@ function normalizeTripScheduleItem(item) {
   };
 }
 
+function normalizeImportSource(value) {
+  if (!value || typeof value !== 'object') return null;
+  const importedAt = String(value.importedAt ?? '');
+  if (!importedAt || Number.isNaN(Date.parse(importedAt))) return null;
+  return { filename: String(value.filename ?? ''), importedAt };
+}
+
 function normalizeTripSchedule(value) {
   const source = value && typeof value === 'object' ? value : {};
   return {
-    items: Array.isArray(source.items) ? source.items.map(normalizeTripScheduleItem) : []
+    items: Array.isArray(source.items) ? source.items.map(normalizeTripScheduleItem) : [],
+    importedFrom: normalizeImportSource(source.importedFrom)
   };
 }
 
@@ -419,6 +431,8 @@ function normalizeProject(project) {
     startDate: String(source.startDate ?? ''),
     endDate: String(source.endDate ?? ''),
     tripSchedule: normalizeTripSchedule(source.tripSchedule),
+    fixedCosts: normalizeFixedCosts(source.fixedCosts),
+    dayAbsentSharesCommonCost: Boolean(source.dayAbsentSharesCommonCost),
     totalStudents: Math.max(0, number(source.totalStudents)),
     actualParticipants: Math.max(0, number(source.actualParticipants)),
     absentStudents: Math.max(0, number(source.absentStudents)),

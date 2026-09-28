@@ -1,3 +1,4 @@
+import { fixedCostExpenses } from './fixedCosts.js';
 import { number } from './utils.js';
 
 function roundShared(value, mode) {
@@ -180,8 +181,13 @@ export function calculateStaffExpense(expense, project, settlement = false) {
   return { total: Math.max(0, Math.round(number(expense.unitAmount) * paidStaffCount)), paidStaffCount };
 }
 
+// 사업정보 고정비는 체험처 표와 따로 저장하지만, 비용 합계와 재원 배분에는 체험처 비용과 함께 들어간다.
+export function studentExpenseItems(project) {
+  return [...fixedCostExpenses(project), ...(project.expenses ?? [])];
+}
+
 export function calculateExpenses(project, settlement = false) {
-  const rows = project.expenses.map(expense => calculateExpense(expense, project, settlement));
+  const rows = studentExpenseItems(project).map(expense => calculateExpense(expense, project, settlement));
   return {
     rows,
     studentTotal: rows.reduce((s, row) => s + row.studentTotal, 0),

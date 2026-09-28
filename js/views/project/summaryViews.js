@@ -5,13 +5,6 @@ export function money(value) {
   return formatWon(Math.round(number(value)));
 }
 
-export function vulnerableStudentTotal(project) {
-  if (project.vulnerableStudents !== undefined && project.vulnerableStudents !== null) {
-    return Math.max(0, number(project.vulnerableStudents));
-  }
-  return Math.max(0, number(project.vulnerableParticipants) + number(project.vulnerableAbsent));
-}
-
 export function vulnerableFullPerPerson(project) {
   const counts = projectCounts(project);
   if (counts.vulnerableParticipants <= 0) return 0;
@@ -76,7 +69,7 @@ export function renderHeadcountReport(project) {
 
   return `
     <div class="report-text" aria-live="polite">
-      <p>해당 학년 학생수 ${counts.total}명 중 실제 참여 학생은 ${counts.participants}명(불참 ${counts.absent}명)입니다. 인솔자 수는 ${counts.chaperones}명이며, 총 참가자 수(인솔자 포함)는 ${totalParticipants}명입니다.</p>
+      <p>해당 학년 학생수 ${counts.total}명 중 실제 참여 학생은 ${counts.participants}명(당일 불참 ${counts.contractedAbsent}명)입니다. 인솔자 수는 ${counts.chaperones}명이며, 총 참가자 수(인솔자 포함)는 ${totalParticipants}명입니다.</p>
       <p>실제 참여 학생 중 취약계층은 ${counts.vulnerableParticipants}명, 비취약계층은 ${counts.regularParticipants}명입니다.</p>
     </div>`;
 }
