@@ -16,7 +16,7 @@ function sameEntry(entry, target) {
 
 /** 한 사업에서 이 기타비를 함께 부담할 인원. */
 export function sharedPeopleOf(project, target) {
-  const settings = normalizeFixedCosts(project.fixedCosts).find(entry => sameEntry(entry, target)) ?? target;
+  const settings = normalizeFixedCosts(project.fixedCosts).find(entry => !entry.removed && sameEntry(entry, target)) ?? target;
   const c = projectCounts(project);
   const absent = settings.commonCost && project.dayAbsentSharesCommonCost ? c.contractedAbsent : 0;
   const chaperones = settings.includeChaperones ? c.chaperones : 0;
@@ -88,6 +88,7 @@ export function propagateSharedLinks(projects, previousProject, nextProject) {
         return withEntry(project, entry, target => ({
           ...target,
           mode: 'total',
+          removed: false,
           amount: entry.amount,
           roundTo10: entry.roundTo10,
           headcount: null,

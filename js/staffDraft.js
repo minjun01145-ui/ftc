@@ -1,6 +1,6 @@
 import { applyCostMethod, costInputAmount } from './costMethods.js';
 import { projectCounts } from './engine.js';
-import { fixedCostBreakdown, normalizeFixedCosts } from './fixedCosts.js';
+import { activeFixedCosts, fixedCostBreakdown } from './fixedCosts.js';
 import { createExpense } from './presets.js';
 
 /**
@@ -26,7 +26,7 @@ function fixedCostStaffRows(project) {
   const c = projectCounts(project);
   const counts = { participants: c.participants, dayAbsent: c.contractedAbsent, chaperones: c.chaperones };
   const options = { dayAbsentSharesCommonCost: Boolean(project.dayAbsentSharesCommonCost) };
-  return normalizeFixedCosts(project.fixedCosts)
+  return activeFixedCosts(project.fixedCosts)
     .filter(entry => entry.amount > 0)
     .flatMap(entry => {
       const name = entry.label || '기타비';

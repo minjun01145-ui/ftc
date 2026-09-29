@@ -11,6 +11,7 @@ import { renderPreTripSection } from './project/preTripSection.js';
 import { renderProposalSection } from './project/proposalSection.js';
 import { renderSettlementSection } from './project/settlementSection.js';
 import { renderTripScheduleSection } from './project/tripScheduleSection.js';
+import { renderVerifySection } from './project/verifySection.js';
 
 const SECTION_RENDERERS = Object.freeze({
   [PROJECT_SECTION.BUSINESS]: (project, school) => `${renderBusinessInfoSection(project, school)}${renderTripScheduleSection(project)}`,
@@ -19,6 +20,7 @@ const SECTION_RENDERERS = Object.freeze({
   [PROJECT_SECTION.BUDGET]: renderBudgetSection,
   [PROJECT_SECTION.PRE_TRIP]: renderPreTripSection,
   [PROJECT_SECTION.PROPOSAL]: renderProposalSection,
+  [PROJECT_SECTION.VERIFY]: renderVerifySection,
   [PROJECT_SECTION.SETTLEMENT]: renderSettlementSection
 });
 

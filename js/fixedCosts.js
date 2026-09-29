@@ -4,7 +4,8 @@ import { number, uid } from './utils.js';
  * 체험처/비용 화면의 '기타비'. 저장 키는 예전 이름 그대로 project.fixedCosts를 쓴다.
  *
  * project.fixedCosts = [{ id, builtin, label, mode, amount, includeChaperones, roundTo10, commonCost, memo }, ...]
- * - 기본 항목(버스비·숙소비·보험비)은 builtin에 키가 있고 지울 수 없다. 사용자가 항목을 더 추가할 수 있다.
+ * - 기본 항목(버스비·숙소비·보험비)은 builtin에 키가 있다. 삭제하면 removed로 표시해 계산에서 빼고, 다시 추가할 수 있다.
+ *   사용자가 항목을 더 추가할 수 있다.
  * - mode 'perPerson' : 입력한 1인당 금액을 그대로 쓴다.
  * - mode 'total'     : 전체 계약액을 인원으로 나눠 1인당 금액을 만든다.
  *     includeChaperones : 학생 + 인솔자 수로 나눈다(아니면 학생 수만).
@@ -61,6 +62,7 @@ function normalizeEntry(source, builtin = null) {
     sharedTitles: Array.isArray(source.sharedTitles) ? source.sharedTitles.map(String) : [],
     // 공통비: 신청 후 불참자도 부담하는 항목(버스비·숙소비는 처음부터 체크). 사용자가 바꿀 수 있다.
     commonCost: typeof source.commonCost === 'boolean' ? source.commonCost : Boolean(builtin?.commonCost),
+    removed: builtin ? Boolean(source.removed) : false,
     memo: String(source.memo ?? '')
   };
 }
@@ -76,6 +78,11 @@ export function normalizeFixedCosts(value) {
   const builtins = BUILTIN_FIXED_COSTS.map(builtin => builtinEntry(builtin, entries.find(entry => entry.builtin === builtin.key)));
   const custom = entries.filter(entry => !entry.builtin).map(entry => normalizeEntry(entry));
   return [...builtins, ...custom];
+}
+
+/** 삭제하지 않은 기타비만 */
+export function activeFixedCosts(value) {
+  return normalizeFixedCosts(value).filter(entry => !entry.removed);
 }
 
 export function fixedCostLineId(entry) {
@@ -152,7 +159,7 @@ function countsOptions(project) {
  * 1인당 금액을 미리 계산해 두므로 엔진은 다른 체험처와 똑같이 '1인당 금액 × 인원'으로 계산한다.
  */
 export function fixedCostExpenses(project, counts) {
-  return normalizeFixedCosts(project?.fixedCosts)
+  return activeFixedCosts(project?.fixedCosts)
     .filter(entry => entry.amount > 0)
     .map(entry => {
       const breakdown = fixedCostBreakdown(entry, counts, countsOptions(project));
@@ -183,7 +190,7 @@ export function fixedCostExpenses(project, counts) {
  * 예) 버스비 → 인솔자 8명 × 113,920원 = 911,360원, 버림 잔액 320원
  */
 export function fixedCostStaffShares(project, counts) {
-  return normalizeFixedCosts(project?.fixedCosts)
+  return activeFixedCosts(project?.fixedCosts)
     .filter(entry => entry.amount > 0 && entry.mode === 'total')
     .flatMap(entry => {
       const breakdown = fixedCostBreakdown(entry, counts, countsOptions(project));

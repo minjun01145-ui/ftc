@@ -1,4 +1,4 @@
-import { normalizeFixedCosts } from './fixedCosts.js';
+import { activeFixedCosts } from './fixedCosts.js';
 import { koreanDateLabel } from './dates.js';
 import { number } from './utils.js';
 
@@ -101,7 +101,9 @@ function scheduleIssues(expenses, dates) {
 
 function fixedCostIssues(project, dates) {
   const issues = [];
-  const byKey = new Map(normalizeFixedCosts(project.fixedCosts).filter(entry => entry.builtin).map(entry => [entry.builtin, entry]));
+  const all = new Map(activeFixedCosts(project.fixedCosts).filter(entry => entry.builtin).map(entry => [entry.builtin, entry]));
+  // 삭제한 기본 항목은 일부러 뺀 것이므로 입력하라고 하지 않는다.
+  const byKey = { get: key => (all.has(key) ? all.get(key) : { amount: 1 }) };
   const overnight = project.executionMode === '숙박형' || dates.length > 1;
   if (!byKey.get('bus')?.amount) issues.push('기타비: 버스비가 입력되지 않았습니다.');
   if (overnight && !byKey.get('lodging')?.amount) issues.push('기타비: 숙박형인데 숙소비가 입력되지 않았습니다.');

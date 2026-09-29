@@ -341,7 +341,6 @@ table input[type="text"] { min-width: 150px; }
 .shared-close { margin-left: auto; }
 .inline-check { justify-content: flex-start; white-space: nowrap; }
 tr.shared-row > th, tr.shared-row > td { background: #fff4dc; }
-.fixed-delete { display: block; margin: 4px auto 0; }
 .shared-badge { display: block; margin-top: 4px; padding: 2px 4px; border-radius: 3px; background: #f5d58a; color: #5a3d00; font-size: 11px; font-weight: bold; white-space: normal; }
 .project-submenu {
   border-top: 1px solid #d4d4d4;
@@ -647,3 +646,29 @@ input.headcount-input { width: 80px; min-width: 0; }
 @media print {
   .proposal-table tr.split-row td, .proposal-table th, .proposal-table td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* 검증 도우미 */
+.verify-summary { margin: 0 0 12px; padding: 8px 12px; border: 1px solid; font-weight: bold; }
+.verify-summary.ok { background: #eaf6ea; border-color: #8cc58f; color: #1f5a24; }
+.verify-summary.warn { background: #fff7e0; border-color: #e2c48a; color: #7a4a00; }
+.verify-summary.fail { background: #fdecea; border-color: #e0a19a; color: #8b1a10; }
+.verify-cards { display: grid; gap: 10px; }
+.verify-card { border: 1px solid #ccc; border-left: 6px solid #999; background: #fff; padding: 8px 12px; }
+.verify-card.ok { border-left-color: #2f8a3a; }
+.verify-card.warn { border-left-color: #d49a00; }
+.verify-card.fail { border-left-color: #c0392b; background: #fffafa; }
+.verify-card.skip { border-left-color: #bbb; color: #777; }
+.verify-card header { display: flex; align-items: center; gap: 8px; }
+.verify-card h3 { margin: 0; font-size: 15px; flex: 1; }
+.verify-badge { display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; border-radius: 50%; color: #fff; font-weight: bold; font-size: 13px; background: #999; }
+.verify-card.ok .verify-badge { background: #2f8a3a; }
+.verify-card.warn .verify-badge { background: #d49a00; }
+.verify-card.fail .verify-badge { background: #c0392b; }
+.verify-status { font-size: 12px; font-weight: bold; }
+.verify-card.ok .verify-status { color: #2f8a3a; }
+.verify-card.warn .verify-status { color: #9a6b00; }
+.verify-card.fail .verify-status { color: #c0392b; }
+.verify-lines { margin: 8px 0 4px; padding-left: 20px; font-variant-numeric: tabular-nums; line-height: 1.7; }
+.verify-result { margin: 4px 0; font-weight: bold; }
+.verify-items { margin: 4px 0 2px; padding-left: 20px; color: #7a4a00; line-height: 1.6; }
+.verify-card.fail .verify-items { color: #8b1a10; }

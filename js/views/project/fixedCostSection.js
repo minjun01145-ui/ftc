@@ -79,13 +79,14 @@ export function fixedCostRowHtml(entry, breakdown = null) {
   const shared = entry.mode === 'total' && entry.sharedTitles.length > 0;
   const badge = shared ? `<small class="shared-badge">${escapeHtml(sharedWithText(entry.sharedTitles))}</small>` : '';
   return `
-    <tr data-fixed-row data-fixed-id="${escapeHtml(entry.id)}" data-builtin="${entry.builtin ?? ''}" class="${shared ? 'shared-row' : ''}">
-      <th scope="row">${name}${badge}${entry.builtin ? '' : '<button type="button" class="small-button danger fixed-delete" data-action="delete-fixed-cost">삭제</button>'}</th>
+    <tr data-fixed-row data-fixed-id="${escapeHtml(entry.id)}" data-builtin="${entry.builtin ?? ''}" class="${shared ? 'shared-row' : ''}" ${entry.removed ? 'hidden' : ''}>
+      <th scope="row">${name}${badge}<input type="hidden" data-fixed-field="removed" value="${entry.removed ? '1' : ''}"></th>
       <td>${modeCell(entry)}</td>
       <td><input type="number" min="0" step="1" data-fixed-field="amount" value="${number(entry.amount)}" aria-label="금액"></td>
       <td class="number">${entered ? money(breakdown.perPerson) : '-'}${entered ? `<small>${escapeHtml(fixedCostBasisText(breakdown))}</small>` : ''}</td>
       <td class="number">${entered ? money(breakdown.studentTotal) : '-'}</td>
       <td><input type="text" data-fixed-field="memo" value="${escapeHtml(entry.memo)}" placeholder="예: 2박" aria-label="내용"></td>
+      <td class="center"><button type="button" class="small-button danger" data-action="delete-fixed-cost">삭제</button></td>
     </tr>`;
 }
 
@@ -97,7 +98,7 @@ function staffShareRows(project) {
         <th scope="row">${escapeHtml(share.label)}</th>
         <td colspan="3">인솔자 비용</td>
         <td class="number">${money(share.total)}</td>
-        <td></td>
+        <td colspan="2"></td>
       </tr>`).join('');
 }
 
@@ -105,8 +106,13 @@ function staffShareRows(project) {
 export function renderFixedCostTable(project) {
   const counts = countsOf(project);
   const options = { dayAbsentSharesCommonCost: Boolean(project.dayAbsentSharesCommonCost) };
-  const rows = normalizeFixedCosts(project.fixedCosts)
+  const entries = normalizeFixedCosts(project.fixedCosts);
+  const rows = entries
     .map(entry => fixedCostRowHtml(entry, fixedCostBreakdown(entry, counts, options)))
+    .join('');
+  // 삭제한 기본 항목을 다시 추가하는 버튼
+  const restore = entries.filter(entry => entry.builtin)
+    .map(entry => `<button type="button" class="small-button" data-action="restore-fixed-cost" data-builtin="${entry.builtin}" ${entry.removed ? '' : 'hidden'}>+ ${escapeHtml(entry.label)}</button>`)
     .join('');
 
   return `
@@ -114,12 +120,13 @@ export function renderFixedCostTable(project) {
       <div class="block-head">
         <h3>기타비</h3>
         <button type="button" class="small-button" data-action="add-fixed-cost">기타비 항목 추가</button>
+        ${restore}
         <span class="spacer"></span>
         <button type="button" class="save-button" data-action="save-student-expenses">저장</button>
       </div>
       <div class="table-wrap">
         <table class="compact-table fixed-cost-table">
-          <thead><tr><th>항목</th><th>입력 방식</th><th>금액(원)</th><th>학생 1인당</th><th>학생 합계</th><th>내용</th></tr></thead>
+          <thead><tr><th>항목</th><th>입력 방식</th><th>금액(원)</th><th>학생 1인당</th><th>학생 합계</th><th>내용</th><th>삭제</th></tr></thead>
           <tbody data-fixed-cost-list>${rows}${staffShareRows(project)}</tbody>
         </table>
       </div>
@@ -130,12 +137,35 @@ export function addFixedCostRow(button) {
   const tbody = button.closest('[data-fixed-cost-section]')?.querySelector('[data-fixed-cost-list]');
   if (!tbody) return;
   const lastItem = [...tbody.querySelectorAll('[data-fixed-row]')].at(-1);
-  lastItem.insertAdjacentHTML('afterend', fixedCostRowHtml(createCustomFixedCost()));
-  lastItem.nextElementSibling?.querySelector('[data-fixed-field="label"]')?.focus();
+  const html = fixedCostRowHtml(createCustomFixedCost());
+  if (lastItem) lastItem.insertAdjacentHTML('afterend', html);
+  else tbody.insertAdjacentHTML('afterbegin', html);
+  const added = [...tbody.querySelectorAll('[data-fixed-row]')].at(-1);
+  added?.querySelector('[data-fixed-field="label"]')?.focus();
 }
 
+/** 사용자 항목은 지우고, 기본 항목(버스비 등)은 숨겨 두었다가 다시 추가할 수 있게 한다. */
 export function removeFixedCostRow(button) {
-  button.closest('[data-fixed-row]')?.remove();
+  const row = button.closest('[data-fixed-row]');
+  if (!row) return;
+  const panel = row.nextElementSibling;
+  if (panel?.matches('[data-shared-panel]')) panel.remove();
+  if (!row.dataset.builtin) {
+    row.remove();
+    return;
+  }
+  row.querySelector('[data-fixed-field="removed"]').value = '1';
+  row.hidden = true;
+  row.closest('[data-fixed-cost-section]')?.querySelector(`[data-action="restore-fixed-cost"][data-builtin="${row.dataset.builtin}"]`)?.removeAttribute('hidden');
+}
+
+export function restoreFixedCostRow(button) {
+  const section = button.closest('[data-fixed-cost-section]');
+  const row = section?.querySelector(`[data-fixed-row][data-builtin="${button.dataset.builtin}"]`);
+  if (!row) return;
+  row.querySelector('[data-fixed-field="removed"]').value = '';
+  row.hidden = false;
+  button.hidden = true;
 }
 
 /** 입력 방식을 바꾸면 전체 계약액 전용 체크박스를 켜고 끈다. */
@@ -166,6 +196,7 @@ export function readFixedCostInputs(form, previousFixedCosts) {
       includeChaperones: mode === 'total' ? field('includeChaperones').checked : before.includeChaperones,
       roundTo10: mode === 'total' ? field('roundTo10').checked : before.roundTo10,
       commonCost: field('commonCost').checked,
+      removed: field('removed')?.value === '1',
       headcount: mode === 'total' ? field('headcount').value : before.headcount,
       sharedPeople: mode === 'total' ? field('sharedPeople').value : before.sharedPeople,
       sharedNote: mode === 'total' ? field('sharedNote').value : before.sharedNote,
@@ -202,7 +233,7 @@ function sharedPanelHtml(candidates) {
     : '<p class="help">내 사업에 다른 사업이 없습니다. 다른 학년 사업을 먼저 만들거나 직접 입력하세요.</p>';
   return `
     <tr class="shared-panel-row" data-shared-panel>
-      <td colspan="6">
+      <td colspan="7">
         <div class="shared-panel">
           <div class="shared-option">
             <h4>내 사업에서 가져오기</h4>

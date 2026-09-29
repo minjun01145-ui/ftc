@@ -34,6 +34,7 @@ import {
   closeSharedPanel,
   openSharedPanel,
   removeFixedCostRow,
+  restoreFixedCostRow,
   sharedCandidates,
   syncFixedCostModeControls
 } from './views/project/fixedCostSection.js';
@@ -779,7 +780,16 @@ main.addEventListener('click', event => {
     return;
   }
 
+  if (action === 'restore-fixed-cost') {
+    restoreFixedCostRow(button);
+    setDirty(true);
+    return;
+  }
+
   if (action === 'delete-fixed-cost') {
+    const label = button.closest('[data-fixed-row]')?.querySelector('th')?.firstChild?.textContent.trim()
+      || button.closest('[data-fixed-row]')?.querySelector('[data-fixed-field="label"]')?.value || '이 항목';
+    if (!confirm(`기타비 '${label}'을(를) 삭제할까요? 저장하면 반영됩니다.`)) return;
     removeFixedCostRow(button);
     setDirty(true);
     return;
