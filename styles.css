@@ -618,3 +618,32 @@ tr[class*="day-tone-"] > td:first-child { box-shadow: inset 4px 0 0 var(--day-to
 .budget-formula { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; margin-left: auto; }
 input.headcount-input { width: 80px; min-width: 0; }
 .headcount-summary { align-self: center; font-weight: bold; }
+
+/* 예산별 품의 내용: 예산마다 색, 합계 강조, 나눈 항목은 같은 색 */
+.proposal-table thead th { background: #3b4a5a; color: #fff; }
+.proposal-table tr.proposal-head td { font-weight: bold; }
+.proposal-table tbody.tone-education th[scope="rowgroup"] { background: #d6e6f7; color: #1f4f7a; }
+.proposal-table tbody.tone-education tr.proposal-head td { background: #f1f6fc; }
+.proposal-table tbody.tone-education tr.subtotal td { background: #d6e6f7; color: #1f4f7a; }
+.proposal-table tbody.tone-other th[scope="rowgroup"] { background: #d8efd9; color: #2f6b35; }
+.proposal-table tbody.tone-other tr.proposal-head td { background: #f1f9f1; }
+.proposal-table tbody.tone-other tr.subtotal td { background: #d8efd9; color: #2f6b35; }
+.proposal-table tbody.tone-student th[scope="rowgroup"] { background: #fbe3c6; color: #8a4b00; }
+.proposal-table tbody.tone-student tr.proposal-head td { background: #fdf4e8; }
+.proposal-table tbody.tone-student tr.subtotal td { background: #fbe3c6; color: #8a4b00; }
+.proposal-table tr.subtotal td { font-size: 14px; }
+.proposal-table tfoot tr.total th, .proposal-table tfoot tr.total td { background: #3b4a5a; color: #fff; font-size: 15px; }
+.proposal-table tr.split-row td { font-weight: bold; }
+.proposal-table tr.split-row td:first-child { border-left: 5px solid var(--split-strong); }
+.proposal-table tr.split-row td { background: var(--split); }
+.split-0 { --split: #fff1a8; --split-strong: #d4a800; }
+.split-1 { --split: #d5f0ff; --split-strong: #2a8fc9; }
+.split-2 { --split: #f8d9f0; --split-strong: #b83f98; }
+.split-3 { --split: #dcf5cf; --split-strong: #4c9a2a; }
+.split-4 { --split: #ffe0cc; --split-strong: #d0671f; }
+.split-5 { --split: #e4dcfb; --split-strong: #6a4fc4; }
+.proposal-table .split-tag { color: #333 !important; font-weight: bold; }
+.split-legend { margin: 6px 0 0; font-size: 12px; color: #555; }
+@media print {
+  .proposal-table tr.split-row td, .proposal-table th, .proposal-table td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

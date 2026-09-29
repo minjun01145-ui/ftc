@@ -238,72 +238,121 @@ function budgetCard(proposal, block) {
 
 /* ---------- 예산별 품의 내용(엑셀 3번 표) ---------- */
 
-function row(label, count, perPerson, total, { item = false } = {}) {
-  return `<tr><td class="${item ? 'proposal-item' : ''}">${label}</td><td class="number">${number(count)}</td><td class="number">${won(perPerson)}</td><td class="number">${won(total)}</td></tr>`;
+const SPLIT_COLORS = 6;
+
+const partKey = (block, part) => (part.absent ? part.lineId : `${block.budget.group}:${part.lineId}`);
+
+/** 여러 예산으로 나눈 항목마다 색 번호를 붙인다(같은 항목의 조각은 같은 색). */
+function splitColors(proposal) {
+  const seen = new Map();
+  for (const block of proposal.blocks) {
+    for (const part of [...block.parts, ...block.absentParts]) {
+      if (part.perPerson <= 0) continue;
+      const key = partKey(block, part);
+      seen.set(key, (seen.get(key) ?? 0) + 1);
+    }
+  }
+  const colors = new Map();
+  for (const [key, pieces] of seen) {
+    if (pieces > 1) colors.set(key, colors.size % SPLIT_COLORS);
+  }
+  return colors;
 }
 
-function partRows(block) {
+function row(label, count, perPerson, total, { item = false, head = false, split = null } = {}) {
+  const classes = [head ? 'proposal-head' : '', split === null ? '' : `split-row split-${split}`].filter(Boolean).join(' ');
+  return `<tr class="${classes}"><td class="${item ? 'proposal-item' : ''}">${label}</td><td class="number">${number(count)}</td><td class="number">${won(perPerson)}</td><td class="number">${won(total)}</td></tr>`;
+}
+
+function pieceNote(part, split) {
+  if (split === null) return '';
+  return part.remainder ? ' <small class="split-tag">(나머지)</small>' : ' <small class="split-tag">(일부)</small>';
+}
+
+function partRows(block, colors) {
   return block.parts
     .filter(part => part.perPerson > 0)
-    .map(part => row(`${escapeHtml(lineLabel(part))}${part.remainder ? ' <small>(나머지)</small>' : ''}`, block.budget.count, part.perPerson, part.total, { item: true }));
+    .map(part => {
+      const split = colors.get(partKey(block, part)) ?? null;
+      return row(`${escapeHtml(lineLabel(part))}${pieceNote(part, split)}`, block.budget.count, part.perPerson, part.total, { item: true, split });
+    });
 }
 
-function absentRows(block) {
-  return block.absentParts.map(part => row(`${escapeHtml(lineLabel(part))}(${escapeHtml(absentGroupText(part))})`, part.count, part.perPerson, part.total, { item: true }));
+function absentItemRows(block, parts, colors) {
+  return parts.map(part => {
+    const split = colors.get(partKey(block, part)) ?? null;
+    return row(`${escapeHtml(lineLabel(part))}${pieceNote(part, split)}`, part.count, part.perPerson, part.total, { item: true, split });
+  });
+}
+
+/** 신청 후 불참 학생 몫: 머리 줄(몇 명에게 1인당 얼마) + 항목 줄 */
+function absentRows(block, colors, headText) {
+  return ['vulnerable', 'regular'].flatMap(group => {
+    const parts = block.absentParts.filter(part => part.group === group);
+    if (!parts.length) return [];
+    const count = parts[0].count;
+    const perPerson = parts.reduce((sum, part) => sum + part.perPerson, 0);
+    const total = parts.reduce((sum, part) => sum + part.total, 0);
+    const groupText = group === 'vulnerable' ? '취약계층' : '비취약계층';
+    return [row(headText(groupText, perPerson), count, perPerson, total, { head: true }), ...absentItemRows(block, parts, colors)];
+  });
 }
 
 function tableGroups(proposal) {
+  const colors = splitColors(proposal);
   const block = id => proposal.blocks.find(item => item.budget.id === id);
   const vulnerable = block(VULNERABLE_BUDGET_ID);
   const education = block(EDUCATION_BUDGET_ID);
+  const supportText = (groupText, perPerson) => `신청 후 불참 ${groupText} 학생에게 ${won(perPerson)}원 지원(공통비)`;
   const groups = [];
 
   const educationRows = [];
   if (vulnerable.participantTotal > 0) {
     const fullyCovered = !proposal.unassigned.vulnerable.length && !Number.isFinite(vulnerable.budget.capPerPerson);
     educationRows.push(row(fullyCovered ? '취약계층 학생에게 현장체험학습비 전액 지원' : `취약계층 학생에게 ${won(vulnerable.usedPerPerson)}원 지원`,
-      vulnerable.budget.count, vulnerable.usedPerPerson, vulnerable.total));
-    if (!fullyCovered) educationRows.push(...partRows(vulnerable));
+      vulnerable.budget.count, vulnerable.usedPerPerson, vulnerable.participantTotal, { head: true }));
+    if (!fullyCovered) educationRows.push(...partRows(vulnerable, colors));
   }
-  educationRows.push(...absentRows(vulnerable));
+  educationRows.push(...absentRows(vulnerable, colors, supportText));
   if (education.participantTotal > 0) {
-    educationRows.push(row(`비취약계층 학생에게 ${won(education.usedPerPerson)}원 지원`, education.budget.count, education.usedPerPerson, education.participantTotal));
-    educationRows.push(...partRows(education));
+    educationRows.push(row(`비취약계층 학생에게 ${won(education.usedPerPerson)}원 지원`, education.budget.count, education.usedPerPerson, education.participantTotal, { head: true }));
+    educationRows.push(...partRows(education, colors));
   }
-  educationRows.push(...absentRows(education));
-  groups.push({ name: '교육청 지원금', rows: educationRows, total: proposal.education.total });
+  educationRows.push(...absentRows(education, colors, supportText));
+  groups.push({ name: '교육청 지원금', tone: 'education', rows: educationRows, total: proposal.education.total });
 
   for (const other of proposal.blocks.filter(item => ![VULNERABLE_BUDGET_ID, EDUCATION_BUDGET_ID, STUDENT_BUDGET_ID].includes(item.budget.id))) {
     groups.push({
       name: other.budget.name,
-      rows: [
-        ...(other.participantTotal > 0 ? [row(`비취약계층 학생에게 ${won(other.usedPerPerson)}원 지원`, other.budget.count, other.usedPerPerson, other.participantTotal), ...partRows(other)] : []),
-        ...absentRows(other)
-      ],
+      tone: 'other',
+      rows: other.participantTotal > 0
+        ? [row(`비취약계층 학생에게 ${won(other.usedPerPerson)}원 지원`, other.budget.count, other.usedPerPerson, other.participantTotal, { head: true }), ...partRows(other, colors)]
+        : [],
       total: other.total
     });
   }
 
   const student = block(STUDENT_BUDGET_ID);
   const studentRows = student.participantTotal > 0
-    ? [row('비취약계층 학생의 실부담액', student.budget.count, student.usedPerPerson, student.participantTotal), ...partRows(student)]
+    ? [row('비취약계층 학생의 실부담액', student.budget.count, student.usedPerPerson, student.participantTotal, { head: true }), ...partRows(student, colors)]
     : [];
-  studentRows.push(...absentRows(student));
   if (proposal.vulnerableBurden.total > 0) {
     const { vulnerableBurden } = proposal;
-    studentRows.push(row('취약계층 학생의 실부담액', vulnerableBurden.count, vulnerableBurden.perPerson, vulnerableBurden.total));
+    studentRows.push(row('취약계층 학생의 실부담액', vulnerableBurden.count, vulnerableBurden.perPerson, vulnerableBurden.total, { head: true }));
   }
-  groups.push({ name: '수익자 부담', rows: studentRows, total: student.total + proposal.vulnerableBurden.total });
-  return groups.filter(group => group.rows.length);
+  studentRows.push(...absentRows(student, colors, groupText => `신청 후 불참 ${groupText} 학생의 실부담액(공통비)`));
+  groups.push({ name: '수익자 부담', tone: 'student', rows: studentRows, total: student.total + proposal.vulnerableBurden.total });
+  return { groups: groups.filter(group => group.rows.length), hasSplits: colors.size > 0 };
 }
 
 function proposalTable(proposal) {
-  const bodies = tableGroups(proposal).map(group => {
+  const { groups, hasSplits } = tableGroups(proposal);
+  const bodies = groups.map(group => {
     const [first, ...rest] = group.rows;
     const heading = `<th scope="rowgroup" rowspan="${group.rows.length + 1}">${escapeHtml(group.name)}</th>`;
     return `
-      <tbody class="proposal-block">
-        ${first.replace('<tr>', `<tr>${heading}`)}
+      <tbody class="proposal-block tone-${group.tone}">
+        ${first.replace(/^<tr([^>]*)>/, `<tr$1>${heading}`)}
         ${rest.join('')}
         <tr class="subtotal"><td>${escapeHtml(group.name)} 합계</td><td></td><td></td><td class="number">${won(group.total)}</td></tr>
       </tbody>`;
@@ -311,6 +360,7 @@ function proposalTable(proposal) {
   const unassigned = proposal.unassignedTotal > 0
     ? `<tr class="unassigned"><th colspan="4">아직 배정하지 않은 금액</th><td class="number">${won(proposal.unassignedTotal)}</td></tr>`
     : '';
+  const legend = hasSplits ? '<p class="split-legend">같은 색으로 칠한 줄은 한 항목을 여러 예산으로 나누어 품의한 것입니다.</p>' : '';
 
   return `
     <div class="table-wrap">
@@ -322,13 +372,14 @@ function proposalTable(proposal) {
           <tr class="total"><th colspan="4">총액</th><td class="number">${won(proposal.assignedTotal)}</td></tr>
         </tfoot>
       </table>
-    </div>`;
+    </div>
+    ${legend}`;
 }
 
 /* ---------- 품의 안내 ---------- */
 
 export function proposalGuide(proposal) {
-  const steps = tableGroups(proposal).map(group => `${group.name}: 총 ${won(group.total)}원`);
+  const steps = tableGroups(proposal).groups.map(group => `${group.name}: 총 ${won(group.total)}원`);
   const notes = [];
   for (const split of proposal.splits) {
     const pieces = split.pieces.map(piece => `${piece.budgetName} ${won(piece.perPerson)}원`).join(' + ');
@@ -337,6 +388,9 @@ export function proposalGuide(proposal) {
   for (const block of proposal.blocks) {
     if (block.budget.count > 0 && block.unusedPerPerson > 0 && block.usedPerPerson > 0) {
       notes.push(`${block.budget.name} 1인당 ${won(block.unusedPerPerson)}원이 남습니다.`);
+    }
+    if (block.absentUnusedPerPerson > 0) {
+      notes.push(`${block.budget.name}의 신청 후 불참 학생 몫 1인당 ${won(block.absentUnusedPerPerson)}원(${block.absentCount}명)이 남습니다.`);
     }
   }
   const { balance } = proposal.education;

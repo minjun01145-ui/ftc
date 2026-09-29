@@ -186,14 +186,20 @@ function unassignedLines(lines, pool) {
     .map(line => ({ lineId: line.id, name: line.name, date: line.date, perPerson: pool.get(line.id), full: pool.get(line.id) === line.perPerson }));
 }
 
-function findSplits(results, budgets) {
+function findSplits(results, absentResults, budgets) {
   const nameOf = new Map(budgets.map(budget => [budget.id, budget.name]));
   const regular = new Set(budgets.filter(budget => budget.group === 'regular').map(budget => budget.id));
   const byLine = new Map();
+  const add = (key, name, result) => {
+    if (!byLine.has(key)) byLine.set(key, { name, pieces: [] });
+    byLine.get(key).pieces.push({ budgetName: nameOf.get(result.budgetId), perPerson: result.perPerson });
+  };
   for (const result of results) {
-    if (!regular.has(result.budgetId) || result.perPerson <= 0) continue;
-    if (!byLine.has(result.lineId)) byLine.set(result.lineId, { name: result.name, pieces: [] });
-    byLine.get(result.lineId).pieces.push({ budgetName: nameOf.get(result.budgetId), perPerson: result.perPerson });
+    if (regular.has(result.budgetId) && result.perPerson > 0) add(result.lineId, result.name, result);
+  }
+  // 신청 후 불참 공통비도 교육청 지원금과 수익자 부담으로 나뉠 수 있다.
+  for (const result of absentResults) {
+    if (result.perPerson > 0) add(result.lineId, `${result.name}(신청 후 불참 ${result.count}명)`, result);
   }
   return [...byLine.values()].filter(item => item.pieces.length > 1);
 }
@@ -287,7 +293,7 @@ export function buildProposal(project) {
     unassigned,
     vulnerableBurden,
     regularUnassignedPerPerson,
-    splits: findSplits(results, budgets),
+    splits: findSplits(results, absentResults, budgets),
     perPersonTotal: sumLines(lines, 'perPerson'),
     education: { total: educationTotal, grantTotal, balance: grantTotal === null ? null : grantTotal - educationTotal },
     assignedTotal,

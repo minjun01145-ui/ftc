@@ -62,7 +62,16 @@ export function buildSettlementReport(project, school = {}) {
   if (proposal.dayAbsentTotal > 0) {
     if (remarks.length) remarks.push('');
     const names = [...new Set(proposal.absent.map(item => item.name))];
-    remarks.push(`신청 후 불참자 공통경비(${names.join(', ')}): ${won(proposal.dayAbsentTotal)}`);
+    // 누가 냈는지: 교육청 지원금(불참 학생 몫)과 학생 부담
+    const absentTotalOf = ids => proposal.blocks
+      .filter(block => ids.includes(block.budget.id))
+      .reduce((sum, block) => sum + block.absentTotal, 0);
+    const paid = [
+      ['교육청 지원금', absentTotalOf([VULNERABLE_BUDGET_ID, EDUCATION_BUDGET_ID])],
+      ['학생 부담', absentTotalOf([STUDENT_BUDGET_ID])]
+    ].filter(([, amount]) => amount > 0);
+    const funding = paid.length ? ` (${paid.map(([name, amount]) => `${name} ${won(amount)}`).join(', ')})` : '';
+    remarks.push(`신청 후 불참자 ${proposal.counts.dayAbsent}명 공통경비(${names.join(', ')}): ${won(proposal.dayAbsentTotal)}${funding}`);
   }
 
   const values = {

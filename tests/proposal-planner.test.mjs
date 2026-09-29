@@ -221,3 +221,23 @@ test('공통비 부담을 체크하지 않으면 신청 후 불참 항목이 없
   assert.equal(proposal.counts.regularAbsent, 0);
   assert.deepEqual(proposal.absent, []);
 });
+
+test('예산별 품의 내용에 신청 후 불참 학생 지원 줄이 따로 나오고, 나눈 항목은 같은 색이다', async () => {
+  const { renderProposalSection } = await import('../js/views/project/proposalSection.js');
+  const project = excelProject();
+  project.educationSupport = { ...project.educationSupport, regularPerPerson: 100000 };
+  project.proposalPlan = addAllocations(
+    addAllocations(normalizeProposalPlan({}), EDUCATION_BUDGET_ID, ['ticket', absentLineId('regular', 'fixed-bus')]),
+    STUDENT_BUDGET_ID, [absentLineId('regular', 'fixed-bus'), 'ticket']);
+  const html = renderProposalSection(project);
+
+  assert.match(html, /신청 후 불참 비취약계층 학생에게 100,000원 지원\(공통비\)/);
+  assert.match(html, /신청 후 불참 비취약계층 학생의 실부담액\(공통비\)/);
+  assert.match(html, /tbody class="proposal-block tone-education"/);
+  // 버스비(불참) 100,000 + 13,920, 자유이용권 30,000 → 교육청 30,000(전부)라 나눔 없음
+  const busRows = html.match(/<tr class="split-row split-\d">[^]*?버스비/g) ?? [];
+  assert.equal(busRows.length, 2);
+  assert.match(html, /\(일부\)/);
+  assert.match(html, /\(나머지\)/);
+  assert.match(html, /같은 색으로 칠한 줄은/);
+});
