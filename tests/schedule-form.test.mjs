@@ -57,3 +57,46 @@ test('일정이 없으면 빈 줄 하나짜리 표를 만든다', () => {
   const xml = scheduleTableXml(scheduleFormModel(createProject()));
   assert.match(xml, /rowCnt="2"/);
 });
+
+test('경비 산출내역은 날짜별 항목, 기타비, 1인당 경비, 지원·부담 안내를 담고 HWPX 표로 만든다', async () => {
+  const { costFormModel, costFormHtml } = await import('../js/forms/costForm.js');
+  const { costTableXml } = await import('../js/forms/costHwpx.js');
+  const { createExpense } = await import('../js/presets.js');
+  const { createOtherSupport } = await import('../js/budget.js');
+  const p = createProject('수학여행');
+  Object.assign(p, {
+    totalStudents: 74, actualParticipants: 74, chaperones: 0,
+    fixedCosts: [
+      { builtin: 'bus', mode: 'total', amount: 9_000_000, includeChaperones: false },
+      { builtin: 'lodging', mode: 'perPerson', amount: 77837, memo: '2박' },
+      { builtin: 'insurance', mode: 'perPerson', amount: 2000 }
+    ]
+  });
+  p.expenses = [
+    createExpense({ date: '2026-05-13', name: '롯데월드 자유이용권', unitAmount: 31000 }),
+    createExpense({ date: '2026-05-14', name: '조식: 숙소식', unitAmount: 12000 })
+  ];
+  p.educationSupport = { ...p.educationSupport, regularPerPerson: 220000 };
+  p.otherSupports = [createOtherSupport({ id: 's', name: '학교 자체 예산', amount: 64000 })];
+  const model = costFormModel(p);
+
+  assert.deepEqual(model.rows.map(row => [row.label.join(' '), row.items]), [
+    ['5월 13일(수)', ['롯데월드 자유이용권: 31,000원']],
+    ['5월 14일(목)', ['조식: 숙소식, 12,000원']],
+    ['버스비', ['버스비: 9,000,000원 ÷ 74명 = 121,620원']],
+    ['숙소비', ['숙소비: 77,837원(2박)']],
+    ['보험비', ['보험비: 2,000원']]
+  ]);
+  assert.equal(model.perPerson, 31000 + 12000 + 121620 + 77837 + 2000);
+  assert.deepEqual(model.notes, [
+    '※ 교육청 예산(1인당 220,000원) 및 학교 자체 예산(1인당 24,457원) 지원',
+    '※ 학부모 부담 금액(예상액): 1인당 총 0원'
+  ], '지원금은 1인당 경비를 넘지 않게 적는다');
+  assert.match(costFormHtml(model), /• 롯데월드 자유이용권: 31,000원/);
+
+  const xml = costTableXml(model);
+  assert.match(xml, /rowCnt="8" colCnt="2"/, '머리글 + 5줄 + 1인당 경비 + 안내');
+  assert.match(xml, /treatAsChar="0"/);
+  assert.match(xml, /paraPrIDRef="16"[^>]*><hp:run charPrIDRef="22"><hp:t>롯데월드 자유이용권: 31,000원<\/hp:t>/, '항목은 견본의 글머리표 문단');
+  assert.match(xml, /colSpan="2" rowSpan="1"/);
+});

@@ -19,7 +19,7 @@ function card(title, body) {
 
 export function renderSettlementSection(project, school = {}) {
   const { values, warnings } = buildSettlementReport(project, school);
-  const basics = [values.schoolName, values.grade === '' ? '' : `${values.grade}학년`, values.executionMode, values.period && `${values.period}(${values.days}일)`, values.place]
+  const basics = [values.schoolName, values.grade === '' ? '' : `${values.grade}학년`, values.executionMode, values.period && `${values.period}(${values.days}일)`]
     .filter(Boolean).join(' · ');
 
   return `

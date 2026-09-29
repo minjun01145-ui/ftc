@@ -106,7 +106,6 @@ export function buildSettlementReport(project, school = {}) {
   if (grantTotal !== null && values.balance < 0) warnings.push('집행액이 교부액보다 많습니다.');
   if (!values.schoolName) warnings.push('기본정보에서 학교명을 입력해 주세요.');
   if (!values.period) warnings.push('사업정보에서 시작일·종료일을 입력해 주세요.');
-  if (!values.place) warnings.push('사업정보에서 장소를 입력해 주세요.');
   if (values.grade === '') warnings.push('인원에서 대상 학년을 선택해 주세요.');
 
   return { values, warnings };
