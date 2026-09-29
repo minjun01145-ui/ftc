@@ -30,6 +30,9 @@ function modeCell(entry) {
       <label class="check-label" title="1인당 금액의 1원 단위를 버리고 10원 단위로 맞춥니다">
         <input type="checkbox" data-fixed-field="roundTo10" data-total-only ${entry.roundTo10 ? 'checked' : ''} ${disabled}> 1원 단위 버림
       </label>
+      <label class="check-label" title="1·3학년이 버스를 같이 타는 경우처럼 다른 사업 인원까지 합친 전체 인원으로 나눌 때 입력합니다. 비워 두면 이 사업 인원으로 나눕니다.">
+        계산 인원 <input type="number" min="0" step="1" class="headcount-input" data-fixed-field="headcount" data-total-only value="${entry.headcount ?? ''}" placeholder="자동" ${disabled} aria-label="계산 인원">명
+      </label>
       <label class="check-label" title="신청 후 불참자도 이 비용을 부담합니다">
         <input type="checkbox" data-fixed-field="commonCost" ${entry.commonCost ? 'checked' : ''}> 공통비
       </label>
@@ -130,6 +133,7 @@ export function readFixedCostInputs(form, previousFixedCosts) {
       includeChaperones: mode === 'total' ? field('includeChaperones').checked : before.includeChaperones,
       roundTo10: mode === 'total' ? field('roundTo10').checked : before.roundTo10,
       commonCost: field('commonCost').checked,
+      headcount: mode === 'total' ? field('headcount').value : before.headcount,
       memo: field('memo').value.trim()
     };
   }));

@@ -22,6 +22,8 @@ export function renderProjectList(projects, currentPage) {
             data-project-id="${escapeHtml(project.id)}"
             data-project-section="${PROJECT_SECTION.BUSINESS}"
             aria-expanded="${activeProject ? 'true' : 'false'}">${escapeHtml(project.title)}</button>
+          <button type="button" class="project-copy" data-copy-project-id="${escapeHtml(project.id)}"
+            title="${escapeHtml(project.title)} 복사" aria-label="${escapeHtml(project.title)} 복사">복사</button>
           <button type="button" class="project-delete" data-delete-project-id="${escapeHtml(project.id)}"
             title="${escapeHtml(project.title)} 삭제" aria-label="${escapeHtml(project.title)} 삭제">×</button>
         </div>

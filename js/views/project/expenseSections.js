@@ -29,7 +29,6 @@ export function renderStudentExpenseSection(project) {
   return `
     <fieldset class="section-fieldset expense-section" data-expense-section="student" data-project-section="expenses">
       <legend>체험처/비용(학생용)</legend>
-      <button type="button" class="section-save save-button" data-action="save-student-expenses">저장</button>
       ${renderFixedCostTable(project)}
       <h3>체험처</h3>
       <div class="toolbar">
@@ -46,7 +45,6 @@ export function renderStaffExpenseSection(project) {
   return `
     <fieldset class="section-fieldset expense-section" data-expense-section="staff" data-project-section="expenses">
       <legend>체험처/비용(인솔자용)</legend>
-      <button type="button" class="section-save save-button" data-action="save-staff-expenses">저장</button>
       <div class="toolbar">
         <button type="button" data-action="draft-staff-expenses">초안 자동 작성</button>
         <button type="button" data-action="add-expense" data-expense-kind="staff">항목 추가</button>

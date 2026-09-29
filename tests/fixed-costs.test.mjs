@@ -121,3 +121,19 @@ test('인솔자용 표는 학생용과 같은 모양이고, 붙여넣기하면 �
   assert.equal(costInputAmount('staff', staff[0]), 30000);
   assert.notEqual(staff[0].id, student[0].id);
 });
+
+test('버스비 계산 인원을 직접 넣으면 그 인원으로 나누고, 넘는 인원 몫은 이 사업 비용이 아니다', () => {
+  const bus = entryOf({ bus: { mode: 'total', amount: 9_000_000, includeChaperones: true, headcount: 150 } }, 'bus');
+  assert.equal(bus.headcount, 150);
+  const breakdown = fixedCostBreakdown(bus, { participants: 70, dayAbsent: 0, chaperones: 8 });
+  assert.equal(breakdown.divisor, 150);
+  assert.equal(breakdown.perPerson, 60000);
+  assert.equal(breakdown.studentTotal, 4_200_000);
+  assert.equal(breakdown.chaperoneTotal, 480_000);
+  assert.equal(breakdown.otherTotal, 4_320_000);
+  assert.equal(breakdown.remainder, 0);
+
+  const tooSmall = fixedCostBreakdown({ ...bus, headcount: 10 }, { participants: 70, dayAbsent: 0, chaperones: 8 });
+  assert.equal(tooSmall.divisor, 78, '이 사업 인원보다 적게는 나누지 않는다');
+  assert.equal(entryOf({ bus: { mode: 'total', amount: 1, headcount: '' } }, 'bus').headcount, null);
+});

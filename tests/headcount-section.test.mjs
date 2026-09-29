@@ -30,16 +30,17 @@ test('해당 학년 학생수는 기본정보에서 읽기 전용으로 불러�
   project.grade = 2;
   const html = renderHeadcountSection(project, school);
   assert.match(html, /id="totalStudents"[^>]*readonly[^>]*value="71"/);
-  assert.match(html, /name="actualParticipants"/);
-  assert.match(html, /name="vulnerableParticipants"/);
+  assert.match(html, /<label for="applicants">신청자 수<\/label>/);
+  assert.match(html, /name="vulnerableApplicants"/);
+  assert.doesNotMatch(html, /실제 참여 학생 수/);
   assert.equal(gradeStudentCount(school, 3), 80);
   assert.equal(gradeStudentCount(school, ''), 0);
 });
 
-test('실제 참여 인원과 취약계층 인원을 인원 흐름에 반영한다', () => {
+test('신청자 수와 취약계층 신청자 수를 인원 흐름에 반영한다', () => {
   const project = createProject();
   project.workflow.attendance.chaperones = 6;
-  const form = fakeForm({ grade: '2', totalStudents: '71', actualParticipants: '68', vulnerableParticipants: '12' });
+  const form = fakeForm({ grade: '2', totalStudents: '71', applicants: '68', vulnerableApplicants: '12' });
   const next = readProjectForm(form, project);
   const summary = summarizeAttendance(next.workflow.attendance, next.totalStudents);
 
@@ -54,11 +55,11 @@ test('실제 참여 인원과 취약계층 인원을 인원 흐름에 반영한�
   assert.equal(next.absentStudents, 3);
 });
 
-test('당일 불참자는 1인당 금액에서 빠지고 학생 총액에는 포함된다', () => {
+test('신청 후 불참자는 1인당 금액에서 빠지고 학생 총액에는 포함된다', () => {
   const project = createProject();
   const form = fakeForm({
-    grade: '2', totalStudents: '71', actualParticipants: '68', dayAbsentStudents: '2',
-    vulnerableParticipants: '12', dayAbsentSharesCommonCost: 'on'
+    grade: '2', totalStudents: '71', applicants: '70', dayAbsentStudents: '2',
+    vulnerableApplicants: '12', dayAbsentSharesCommonCost: 'on'
   });
   const next = readProjectForm(form, project);
   next.expenses = [
@@ -71,42 +72,43 @@ test('당일 불참자는 1인당 금액에서 빠지고 학생 총액에는 포
   assert.equal(next.actualParticipants, 68);
   assert.equal(rows.find(row => row.id === 'per').studentTotal, 68_000);
   assert.equal(rows.find(row => row.id === 'total').studentTotal, 70_000);
-  assert.deepEqual(headcountIssues({ totalStudents: 71, participants: 70, regularDayAbsent: 2, vulnerableParticipants: 0 }).length, 1);
-  assert.doesNotMatch(renderHeadcountSection(next, school), /실제 참여 학생 중 취약계층은/);
 });
 
-test('참여 인원이 학년 학생수나 참여자보다 많으면 저장하지 않는다', () => {
-  assert.match(headcountIssues({ totalStudents: 71, participants: 72, vulnerableParticipants: 0 })[0], /초과/);
-  assert.match(headcountIssues({ totalStudents: 71, participants: 10, vulnerableParticipants: 11 })[0], /취약계층/);
-  assert.match(headcountIssues({ totalStudents: 0, participants: 5, vulnerableParticipants: 0 })[0], /학년/);
-  assert.deepEqual(headcountIssues({ totalStudents: 71, participants: 70, vulnerableParticipants: 17 }), []);
+test('신청자가 학년 학생수를 넘거나 불참이 신청자보다 많으면 저장하지 않는다', () => {
+  assert.match(headcountIssues({ totalStudents: 71, applicants: 72, vulnerableApplicants: 0 })[0], /초과/);
+  assert.match(headcountIssues({ totalStudents: 71, applicants: 10, vulnerableApplicants: 11 })[0], /취약계층/);
+  assert.match(headcountIssues({ totalStudents: 0, applicants: 5, vulnerableApplicants: 0 })[0], /학년/);
+  assert.match(headcountIssues({ totalStudents: 71, applicants: 60, vulnerableApplicants: 9, vulnerableDayAbsent: 10 })[0], /취약계층/);
+  assert.match(headcountIssues({ totalStudents: 71, applicants: 60, vulnerableApplicants: 9, regularDayAbsent: 52 })[0], /비취약계층/);
+  assert.deepEqual(headcountIssues({ totalStudents: 71, applicants: 70, vulnerableApplicants: 17, regularDayAbsent: 2 }), []);
 });
 
-test('신청 후 불참은 취약/비취약으로 나누어 받고, 나머지는 불참(미신청)이다', () => {
+test('신청 60명(비취약 51, 취약 9) 중 비취약 2명이 신청 후 불참하면 비취약 참여는 49명이다', () => {
   const project = createProject();
-  const form = fakeForm({
-    grade: '2', totalStudents: '72', actualParticipants: '70', vulnerableParticipants: '17',
-    dayAbsentStudents: '1', vulnerableDayAbsentStudents: '0', dayAbsentSharesCommonCost: 'on'
-  });
-  const next = readProjectForm(form, project);
+  const next = readProjectForm(fakeForm({
+    grade: '2', totalStudents: '72', applicants: '60', vulnerableApplicants: '9',
+    dayAbsentStudents: '2', vulnerableDayAbsentStudents: '0', dayAbsentSharesCommonCost: 'on'
+  }), project);
   const summary = summarizeAttendance(next.workflow.attendance, next.totalStudents);
 
-  assert.equal(summary.participants, 70);
-  assert.equal(summary.vulnerableParticipants, 17);
-  assert.equal(summary.regularParticipants, 53);
-  assert.equal(summary.regularAbsent, 1);
-  assert.equal(summary.vulnerableAbsent, 0);
+  assert.equal(summary.participants, 58);
+  assert.equal(summary.regularParticipants, 49);
+  assert.equal(summary.vulnerableParticipants, 9);
+  assert.equal(summary.regularAbsent, 2);
   assert.deepEqual(summary.issues, []);
-  assert.equal(next.regularContractedAbsent, 1);
-  assert.match(renderHeadcountSection(next, { grade2Students: 72 }), /id="notAppliedStudents"[^>]*value="1"/);
+  assert.equal(next.regularContractedAbsent, 2);
+  const html = renderHeadcountSection(next, { grade2Students: 72 });
+  assert.match(html, /id="applicants"[^>]*value="60"/);
+  assert.match(html, /id="notAppliedStudents"[^>]*value="12"/);
+  assert.match(html, /58명 \(비취약계층 49명, 취약계층 9명\)/);
 
   const vulnerable = readProjectForm(fakeForm({
-    grade: '2', totalStudents: '72', actualParticipants: '70', vulnerableParticipants: '17',
+    grade: '2', totalStudents: '72', applicants: '60', vulnerableApplicants: '9',
     dayAbsentStudents: '0', vulnerableDayAbsentStudents: '1'
   }), project);
   const vSummary = summarizeAttendance(vulnerable.workflow.attendance, vulnerable.totalStudents);
-  assert.equal(vSummary.vulnerableParticipants, 17);
+  assert.equal(vSummary.vulnerableParticipants, 8);
   assert.equal(vSummary.vulnerableAbsent, 1);
-  assert.equal(vSummary.regularParticipants, 53);
+  assert.equal(vSummary.regularParticipants, 51);
   assert.deepEqual(vSummary.issues, []);
 });

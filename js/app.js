@@ -24,7 +24,7 @@ import {
 } from './views/expenseTable.js';
 import { readProjectForm, renderProjectPage } from './views/projectView.js';
 import { newAdminRowHtml, newManualRowHtml, newSourceRowHtml, readWorkflowForm } from './views/project/workflowSection.js';
-import { gradeStudentCount, headcountIssues } from './views/project/headcountSection.js';
+import { gradeStudentCount, headcountIssues, refreshHeadcountSummary } from './views/project/headcountSection.js';
 import { addOtherSupportRow, moveOtherSupportRow, removeOtherSupportRow } from './views/project/budgetSection.js';
 import { addFixedCostRow, removeFixedCostRow, syncFixedCostModeControls } from './views/project/fixedCostSection.js';
 import { renderProjectList } from './views/sidebarView.js';
@@ -33,6 +33,7 @@ import { readSchoolForm, renderSchoolPage } from './views/schoolView.js';
 const main = document.querySelector('#main');
 const projectList = document.querySelector('#projectList');
 const addProjectBtn = document.querySelector('#addProjectBtn');
+const pasteProjectBtn = document.querySelector('#pasteProjectBtn');
 const exportBtn = document.querySelector('#exportBtn');
 const importInput = document.querySelector('#importInput');
 const message = document.querySelector('#message');
@@ -42,6 +43,8 @@ let currentPage = { type: 'school', projectId: null, section: null };
 let dirty = false;
 let messageTimer;
 let schoolSearchRequestId = 0;
+// '복사'를 누른 사업의 저장된 내용. 붙여넣기를 누르면 새 사업으로 만든다.
+let copiedProject = null;
 const schoolStudentLookup = createSchoolStudentLookup(getSchoolStudentCounts);
 
 // 저장하지 않은 변경이 있으면 저장 버튼을 눈에 띄게 바꾼다(body.has-unsaved).
@@ -284,14 +287,14 @@ function saveProject(form, messageText = '저장했습니다.') {
     nextProject = withSchedule;
     messageText = '체험학습 일정을 저장하고 체험처/비용에 반영했습니다.';
   }
-  if (form.querySelector('[name="actualParticipants"]')) {
+  if (form.querySelector('[name="applicants"]')) {
     const attendance = nextProject.workflow?.attendance ?? {};
     const issues = headcountIssues({
       totalStudents: nextProject.totalStudents,
-      participants: attendance.applicants - attendance.regularDayAbsent - attendance.vulnerableDayAbsent,
+      applicants: attendance.applicants,
+      vulnerableApplicants: attendance.vulnerableEnrolled,
       regularDayAbsent: attendance.regularDayAbsent,
-      vulnerableDayAbsent: attendance.vulnerableDayAbsent,
-      vulnerableParticipants: attendance.vulnerableEnrolled - attendance.vulnerableDayAbsent
+      vulnerableDayAbsent: attendance.vulnerableDayAbsent
     });
     if (issues.length) {
       showMessage(issues[0]);
@@ -395,7 +398,32 @@ function deleteProject(projectId) {
   showMessage('사업을 삭제했습니다.');
 }
 
+function copyProject(projectId) {
+  const project = getState().projects.find(item => item.id === projectId);
+  if (!project) return;
+  copiedProject = structuredClone(project);
+  pasteProjectBtn.disabled = false;
+  const unsaved = currentPage.projectId === projectId && dirty ? ' 저장하지 않은 변경사항은 복사되지 않았습니다.' : '';
+  showMessage(`'${project.title}' 사업을 복사했습니다. 내 사업의 붙여넣기를 누르면 새 사업으로 만듭니다.${unsaved}`);
+}
+
+pasteProjectBtn.addEventListener('click', () => {
+  if (!copiedProject || !canDiscardChanges()) return;
+  const project = { ...structuredClone(copiedProject), id: createProject().id, title: `${copiedProject.title} (복사)` };
+  updateState(state => { state.projects.push(project); });
+  persistState();
+  currentPage = projectPage(project.id);
+  render();
+  showMessage(`'${project.title}' 사업을 만들었습니다. 사업명과 학년을 바꿔 주세요.`);
+});
+
 projectList.addEventListener('click', event => {
+  const copyButton = event.target.closest('[data-copy-project-id]');
+  if (copyButton) {
+    copyProject(copyButton.dataset.copyProjectId);
+    return;
+  }
+
   const deleteButton = event.target.closest('[data-delete-project-id]');
   if (deleteButton) {
     deleteProject(deleteButton.dataset.deleteProjectId);
@@ -470,6 +498,7 @@ main.addEventListener('input', event => {
     schoolStudentLookup.invalidate();
     setSchoolStatus(target.form, '학년도를 바꿨습니다. 학교를 다시 선택하면 학생수를 조회합니다.');
   }
+  if (target.matches('[data-headcount-input]')) refreshHeadcountSummary(target.form);
   if (target.matches('[data-cost-field="quantityBase"]')) {
     const row = target.closest('[data-cost-row]');
     const direct = row?.nextElementSibling;
@@ -516,6 +545,7 @@ main.addEventListener('change', event => {
   if (target.matches('[data-headcount-grade]')) {
     const total = target.form?.elements.totalStudents;
     if (total) total.value = target.value ? String(gradeStudentCount(getState().school, target.value)) : '';
+    refreshHeadcountSummary(target.form);
   }
 
   if (target.name === 'vulnerableFullSupport') {

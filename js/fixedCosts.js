@@ -10,6 +10,8 @@ import { number, uid } from './utils.js';
  *     includeChaperones : 학생 + 인솔자 수로 나눈다(아니면 학생 수만).
  *     roundTo10         : 1인당 금액의 1원 단위를 버린다(10원 단위로 맞춤).
  *   나누고 남은 금액(인솔자 몫, 버림 잔액)은 학생 부담에서 빠지고 인솔자 비용으로 넘어간다.
+ *     headcount : 계산 인원 직접 입력. 1·3학년이 버스를 같이 타는 경우처럼 이 사업 인원이 아닌
+ *                 전체 탑승 인원으로 나눌 때 쓴다. 이 사업 학생(+인솔자)보다 많은 인원은 다른 사업 몫이다.
  * - commonCost : 공통비. 인원 화면의 '신청 후 불참자 공통비 부담'을 체크하면 신청 후 불참자도 학생 수에 들어간다.
  *
  * 예) 버스비 9,000,000원 ÷ (학생 71명 + 인솔자 8명) = 113,924원 → 113,920원
@@ -50,6 +52,7 @@ function normalizeEntry(source, builtin = null) {
     // 이전 버전은 버스비만 인솔자와 나눴고, 항상 10원 단위로 버렸다.
     includeChaperones: typeof source.includeChaperones === 'boolean' ? source.includeChaperones : Boolean(builtin?.includeChaperones),
     roundTo10: typeof source.roundTo10 === 'boolean' ? source.roundTo10 : true,
+    headcount: Math.max(0, Math.floor(number(source.headcount))) || null,
     // 공통비: 신청 후 불참자도 부담하는 항목(버스비·숙소비는 처음부터 체크). 사용자가 바꿀 수 있다.
     commonCost: typeof source.commonCost === 'boolean' ? source.commonCost : Boolean(builtin?.commonCost),
     memo: String(source.memo ?? '')
@@ -91,19 +94,26 @@ export function fixedCostBreakdown(entry, counts, { dayAbsentSharesCommonCost = 
     return { ...base, mode: 'perPerson', perPerson: amount, chaperones: 0, divisor: students, studentTotal: amount * students, chaperoneTotal: 0, remainder: 0, roundTo10: false };
   }
   const chaperones = entry?.includeChaperones ? Math.max(0, number(counts.chaperones)) : 0;
-  const divisor = students + chaperones;
+  const ownPeople = students + chaperones;
+  // 계산 인원을 직접 넣으면 그 인원으로 나눈다(이 사업 인원보다 적게는 나누지 않는다).
+  const divisor = entry?.headcount ? Math.max(entry.headcount, ownPeople) : ownPeople;
+  const otherPeople = divisor - ownPeople;
   const perPerson = divisor > 0 && students > 0 ? floorTo(amount / divisor, entry?.roundTo10 ? 10 : 1) : 0;
   const studentTotal = perPerson * students;
   const chaperoneTotal = perPerson * chaperones;
+  const otherTotal = perPerson * otherPeople;
   return {
     ...base,
     mode: 'total',
     perPerson,
     chaperones,
     divisor,
+    customHeadcount: Boolean(entry?.headcount),
+    otherPeople,
+    otherTotal,
     studentTotal,
     chaperoneTotal,
-    remainder: students > 0 ? amount - studentTotal - chaperoneTotal : 0,
+    remainder: students > 0 ? amount - studentTotal - chaperoneTotal - otherTotal : 0,
     roundTo10: Boolean(entry?.roundTo10)
   };
 }
@@ -116,6 +126,11 @@ export function fixedCostBasisText(breakdown) {
     ? `(학생 ${breakdown.students}명${absent} + 인솔자 ${breakdown.chaperones}명)`
     : `학생 ${breakdown.students}명${absent}`;
   const rounding = breakdown.remainder > 0 ? `, ${breakdown.roundTo10 ? '1원 단위' : '원 미만'} 버림` : '';
+  if (breakdown.customHeadcount) {
+    const others = breakdown.otherPeople > 0 ? `, 다른 사업 등 ${breakdown.otherPeople}명 포함` : '';
+    const own = `학생 ${breakdown.students}명${absent}${breakdown.chaperones > 0 ? ` + 인솔자 ${breakdown.chaperones}명` : ''}`;
+    return `총액 ${won(breakdown.amount)} ÷ 계산 인원 ${breakdown.divisor}명(이 사업 ${own}${others})${rounding}`;
+  }
   return `총액 ${won(breakdown.amount)} ÷ ${people}${rounding}`;
 }
 
