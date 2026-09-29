@@ -22,8 +22,6 @@ export function renderBusinessInfoSection(project, school) {
 
         <label for="executionMode">추진방식</label>
         <select id="executionMode" name="executionMode">${modes}</select>
-        <label for="place">장소</label>
-        <input id="place" name="place" type="text" value="${escapeHtml(project.place)}" placeholder="예: 서울">
       </div>
     </fieldset>`;
 }

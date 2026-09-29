@@ -1,4 +1,4 @@
-import { loadScript } from '../services/scriptLoader.js';
+import { buildHwpx, downloadBlob, escapeXml } from './hwpxPackage.js';
 import { SCHEDULE_FORM_COLUMNS, scheduleFormText } from './scheduleForm.js';
 
 /**
@@ -7,8 +7,6 @@ import { SCHEDULE_FORM_COLUMNS, scheduleFormText } from './scheduleForm.js';
  * 줄 배치(linesegarray)는 넣지 않는다. 한글이 파일을 열 때 다시 계산한다.
  * 표는 글자처럼 취급하지 않는다(treatAsChar=0). 그래야 표가 길면 다음 쪽으로 나뉘고 머리글 줄이 반복된다.
  */
-const TEMPLATE_URL = new URL('../../templates/schedule-hwpx/', import.meta.url).href;
-const JSZIP_URL = new URL('../../vendor/jszip/jszip.min.js', import.meta.url).href;
 
 // 견본 표의 열 너비와 행 높이(HWPUNIT, 1/7200인치)
 const WIDTHS = [5137, 5846, 7560, 18617, 8897];
@@ -29,9 +27,6 @@ const BODY_FILLS = {
 const HEADER_CHAR = 33;
 const BODY_CHAR = 34;
 const CELL_PARA = 36;
-
-const escapeXml = text => String(text ?? '')
-  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 function visualWidth(text) {
   return [...String(text)].reduce((sum, char) => sum + (char.charCodeAt(0) < 128 ? 0.55 : 1), 0) * CHAR_WIDTH;
@@ -121,56 +116,15 @@ export function scheduleSectionXml(model, head, tail) {
   return head + scheduleTableXml(model) + tail;
 }
 
-async function loadJsZip() {
-  if (!globalThis.JSZip) await loadScript(JSZIP_URL);
-  return globalThis.JSZip;
-}
-
-async function templateText(path) {
-  const response = await fetch(new URL(path, TEMPLATE_URL));
-  if (!response.ok) throw new Error(`양식 파일(${path})을 불러오지 못했습니다.`);
-  return response.text();
-}
-
-function contentHpf(template, title) {
-  const now = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
-  return template
-    .replace(/<opf:title>[^<]*<\/opf:title>/, `<opf:title>${escapeXml(title)}</opf:title>`)
-    .replace(/(name="CreatedDate" content="text">)[^<]*/, `$1${now}`)
-    .replace(/(name="ModifiedDate" content="text">)[^<]*/, `$1${now}`);
-}
-
 /** HWPX 파일 내용(Blob). model은 scheduleFormModel()의 결과. */
-export async function buildScheduleHwpx(model, { title = '세부 일정표' } = {}) {
-  const JSZip = await loadJsZip();
-  const files = ['mimetype', 'version.xml', 'settings.xml', 'Contents/header.xml', 'Contents/content.hpf',
-    'Contents/section-head.xml', 'Contents/section-tail.xml', 'META-INF/container.xml', 'META-INF/container.rdf', 'META-INF/manifest.xml'];
-  const text = Object.fromEntries(await Promise.all(files.map(async path => [path, await templateText(path)])));
-
-  const zip = new JSZip();
-  const add = (path, data, options = {}) => zip.file(path, data, { createFolders: false, ...options });
-  // mimetype은 압축하지 않고 맨 앞에 둔다(HWPX 규칙).
-  add('mimetype', text.mimetype.trim(), { compression: 'STORE' });
-  add('version.xml', text['version.xml']);
-  add('Contents/header.xml', text['Contents/header.xml']);
-  add('Contents/section0.xml', scheduleSectionXml(model, text['Contents/section-head.xml'], text['Contents/section-tail.xml']));
-  add('Preview/PrvText.txt', `세부 일정표\r\n${scheduleFormText(model).replace(/\n/g, '\r\n')}`);
-  add('settings.xml', text['settings.xml']);
-  add('META-INF/container.xml', text['META-INF/container.xml']);
-  add('META-INF/manifest.xml', text['META-INF/manifest.xml']);
-  add('META-INF/container.rdf', text['META-INF/container.rdf']);
-  add('Contents/content.hpf', contentHpf(text['Contents/content.hpf'], title));
-  return zip.generateAsync({ type: 'blob', mimeType: 'application/hwp+zip', compression: 'DEFLATE' });
+export function buildScheduleHwpx(model, { title = '세부 일정표' } = {}) {
+  return buildHwpx('schedule-hwpx', {
+    tableXml: scheduleTableXml(model),
+    previewText: `세부 일정표\n${scheduleFormText(model)}`,
+    title
+  });
 }
 
 export async function downloadScheduleHwpx(model, filename, options) {
-  const blob = await buildScheduleHwpx(model, options);
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  downloadBlob(await buildScheduleHwpx(model, options), filename);
 }

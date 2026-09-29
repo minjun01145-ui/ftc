@@ -10,6 +10,8 @@ import { buildStaffDraft } from './staffDraft.js';
 import { copyRichText, tableForPaste } from './forms/clipboard.js';
 import { scheduleFormHtml, scheduleFormModel, scheduleFormText } from './forms/scheduleForm.js';
 import { downloadScheduleHwpx } from './forms/scheduleHwpx.js';
+import { costFormHtml, costFormModel, costFormText } from './forms/costForm.js';
+import { downloadCostHwpx } from './forms/costHwpx.js';
 import { getState, persistState, replaceState, updateState } from './state.js';
 import { downloadJson } from './utils.js';
 import {
@@ -507,6 +509,26 @@ main.addEventListener('click', event => {
     const filename = `${project.title || '체험학습'}_세부일정표.hwpx`.replace(/[\\/:*?"<>|]/g, '_');
     downloadScheduleHwpx(scheduleFormModel(project), filename)
       .then(() => showMessage('세부 일정표 HWPX 파일을 만들었습니다.'))
+      .catch(error => showMessage(`파일을 만들지 못했습니다: ${error.message}`))
+      .finally(() => { button.disabled = false; });
+    return;
+  }
+
+  if (action === 'copy-cost-form') {
+    const model = costFormModel(currentProject());
+    copyRichText(costFormHtml(model), costFormText(model))
+      .then(() => showMessage('경비 산출내역을 복사했습니다. 한글에서 붙여넣기(Ctrl+V) 하세요.'))
+      .catch(error => showMessage(`복사하지 못했습니다: ${error.message}`));
+    return;
+  }
+
+  if (action === 'download-cost-hwpx') {
+    const project = currentProject();
+    if (!project) return;
+    button.disabled = true;
+    const filename = `${project.title || '체험학습'}_경비산출내역.hwpx`.replace(/[\\/:*?"<>|]/g, '_');
+    downloadCostHwpx(costFormModel(project), filename)
+      .then(() => showMessage('경비 산출내역 HWPX 파일을 만들었습니다.'))
       .catch(error => showMessage(`파일을 만들지 못했습니다: ${error.message}`))
       .finally(() => { button.disabled = false; });
     return;

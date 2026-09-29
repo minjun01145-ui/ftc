@@ -11,7 +11,7 @@ test('기타비 입력은 사업정보가 아니라 체험처/비용 화면에 �
   const expenses = renderProjectPage(sampleProject(), { name: '테스트중학교' }, PROJECT_SECTION.EXPENSES);
   assert.doesNotMatch(business, /data-fixed-row/);
   assert.match(business, /name="executionMode"/);
-  assert.match(business, /name="place"/);
+  assert.doesNotMatch(business, /name="place"/, "사업정보에는 장소 칸이 없다");
   assert.equal((expenses.match(/data-fixed-row /g) ?? []).length, 3);
   assert.match(expenses, /data-action="add-fixed-cost"/);
   assert.match(expenses, /1원 단위 버림/);
