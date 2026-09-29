@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>현장체험학습 비용 관리</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div id="layout">
+    <aside id="sidebar">
+      <div class="sidebar-title">현장체험학습 비용 관리</div>
+
+      <div class="project-heading">
+        <span>내 사업</span>
+        <button type="button" id="addProjectBtn" title="사업 추가">+</button>
+      </div>
+      <div id="projectList"></div>
+
+      <div class="sidebar-bottom">
+        <button type="button" id="exportBtn">저장 파일 내보내기</button>
+        <label class="file-label">저장 파일 불러오기<input type="file" id="importInput" accept="application/json,.json"></label>
+      </div>
+    </aside>
+
+    <main id="main"></main>
+  </div>
+
+  <div id="message" aria-live="polite"></div>
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>
