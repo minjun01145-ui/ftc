@@ -103,6 +103,7 @@ export function createTripScheduleItem(overrides = {}) {
   return {
     id: uid('schedule'),
     date: '',
+    place: '',
     name: '',
     arrivalTime: '',
     departureTime: '',
@@ -181,6 +182,7 @@ function normalizeExpense(expense) {
     id: String(source.id || base.id),
     sourceScheduleItemId: source.sourceScheduleItemId ? String(source.sourceScheduleItemId) : null,
     date: String(source.date ?? ''),
+    place: String(source.place ?? ''),
     name: String(source.name ?? ''),
     calcMethod: ['perPerson', 'fixedStudent', 'sharedFixed', 'quantity'].includes(source.calcMethod) ? source.calcMethod : 'perPerson',
     quantityBase: ['participants', 'participantsPlusAbsent', 'fixedCostAbsent', 'totalStudents', 'custom'].includes(source.quantityBase) ? source.quantityBase : 'participants',
@@ -384,6 +386,7 @@ function normalizeTripScheduleItem(item) {
     ...source,
     id: String(source.id || base.id),
     date: String(source.date ?? ''),
+    place: String(source.place ?? ''),
     name: String(source.name ?? ''),
     arrivalTime: String(source.arrivalTime ?? ''),
     departureTime: String(source.departureTime ?? ''),

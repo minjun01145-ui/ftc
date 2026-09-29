@@ -250,10 +250,9 @@ function otherSupportCheck(project, proposal) {
   const items = [];
   for (const block of blocks) {
     const support = (project.otherSupports ?? []).find(item => item.id === block.budget.id);
-    const limit = support?.mode === 'total'
-      ? number(support.amount)
-      : number(support?.amount) * block.budget.count;
-    const basis = support?.mode === 'total' ? `총액 ${won(limit)}` : `1인당 ${won(support?.amount)} × ${block.budget.count}명 = ${won(limit)}`;
+    const limit = block.budgetTotal ?? 0;
+    const people = block.absentCount > 0 ? `${block.budget.count + block.absentCount}명(참여 ${block.budget.count} + 신청 후 불참 ${block.absentCount})` : `${block.budget.count}명`;
+    const basis = support?.mode === 'total' ? `총액 ${won(limit)}` : `1인당 ${won(support?.amount)} × ${people} = ${won(limit)}`;
     lines.push(`${block.budget.name}: ${basis} → 사용 ${won(block.total)}, 남음 ${won(limit - block.total)}`);
     if (block.total > limit) items.push(`${block.budget.name}을(를) 받은 금액보다 ${won(block.total - limit)} 많이 썼습니다.`);
     else if (limit - block.total > 0 && block.total > 0) items.push(`${block.budget.name} ${won(limit - block.total)}이 남습니다.`);

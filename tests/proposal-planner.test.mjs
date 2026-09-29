@@ -182,8 +182,8 @@ test('신청 후 불참자 공통비는 따로 나오고, 체크한 예산에 �
   // 비취약 불참자 몫은 취약계층 예산에 넣을 수 없다.
   assert.deepEqual(absentChecklist(proposal, VULNERABLE_BUDGET_ID), []);
 
-  // 기타 지원금은 참여 학생 몫이라 불참 학생 항목을 넣을 수 없다.
-  assert.deepEqual(absentChecklist(proposal, 'school'), []);
+  // 기타 지원금에도 불참 학생 항목을 넣을 수 있다.
+  assert.equal(absentChecklist(proposal, 'school').length, 2);
   assert.equal(absentChecklist(proposal, STUDENT_BUDGET_ID).length, 2);
 });
 
@@ -240,4 +240,27 @@ test('예산별 품의 내용에 신청 후 불참 학생 지원 줄이 따로 �
   assert.match(html, /\(일부\)/);
   assert.match(html, /\(나머지\)/);
   assert.match(html, /같은 색으로 칠한 줄은/);
+});
+
+test('신청 후 불참 공통비를 기타 지원금에 넣으면 1인당 지원금은 불참 학생 1인당 금액까지, 총액 지원금은 남은 총액 안에서 들어간다', () => {
+  const project = excelProject();
+  // 학교 자체지원금 1인당 32,500원: 불참 학생 1명도 버스비 113,920원 중 32,500원까지
+  project.proposalPlan = addAllocations(normalizeProposalPlan({}), 'school', [absentLineId('regular', 'fixed-bus')]);
+  let proposal = buildProposal(project);
+  let bus = findAllocationResult(proposal, 'school', absentLineId('regular', 'fixed-bus'));
+  assert.equal(bus.perPerson, 32500);
+  assert.equal(bus.left, 113920 - 32500);
+  const school = proposal.blocks.find(block => block.budget.id === 'school');
+  assert.equal(school.budgetTotal, 32500 * 54);
+  assert.equal(school.absentFull, true);
+
+  // 총액 100만원 지원금: 참여 학생 53명에게 1인당 18,867원(=1,000,000/53 버림) 다 쓰면 남은 49원 안에서만
+  project.otherSupports = [...project.otherSupports, createOtherSupport({ id: 'pool', name: '총액 지원', mode: 'total', amount: 1_000_000 })];
+  project.proposalPlan = addAllocations(addAllocations(normalizeProposalPlan({}), 'pool', ['ticket']), 'pool', [absentLineId('regular', 'fixed-bus')]);
+  proposal = buildProposal(project);
+  bus = findAllocationResult(proposal, 'pool', absentLineId('regular', 'fixed-bus'));
+  assert.equal(bus.perPerson, 1_000_000 - 18867 * 53);
+  const pool = proposal.blocks.find(block => block.budget.id === 'pool');
+  assert.ok(pool.total <= 1_000_000);
+  assert.equal(pool.budgetTotal, 1_000_000);
 });

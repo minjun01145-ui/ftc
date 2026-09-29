@@ -62,6 +62,9 @@ export function renderPreTripSection(project) {
           </tfoot>
         </table>
       </div>
-      <div class="page-actions no-print"><button type="button" data-action="print">인쇄</button></div>
+      <div class="page-actions no-print">
+        <button type="button" data-action="copy-table" data-copy-target=".pre-trip-sheet table">표 복사(한글에 붙여넣기)</button>
+        <button type="button" data-action="print">인쇄</button>
+      </div>
     </section>`;
 }

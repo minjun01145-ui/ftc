@@ -17,7 +17,7 @@ import { number } from './utils.js';
  * 예산 카드에서 체크해 넣는다(불참 인원 × 1인당 금액).
  * 교육청은 신청 후 불참 학생에게도 지원금을 주므로, 교육청 예산은 (참여 + 신청 후 불참) × 1인당 지원액이다.
  * 불참 학생 몫(불참 인원 × 1인당 지원액)은 그 학생들의 공통비에만 쓴다. 넘는 금액은 남겨 다른 예산(수익자 부담)에 넣는다.
- * 기타 지원금은 참여 학생에게만 주므로 불참 학생 항목을 넣을 수 없다.
+ * 기타 지원금에도 넣을 수 있다: 1인당 지원금은 불참 학생에게도 1인당 금액까지, 총액 지원금은 참여 학생에게 쓰고 남은 금액 안에서.
  * 취약계층에게 배정하지 않고 남은 금액은 수익자 부담으로 자동 처리한다.
  */
 export const VULNERABLE_BUDGET_ID = 'education-vulnerable';
@@ -49,9 +49,9 @@ function absentLines(lines, counts) {
     : []));
 }
 
-/** 신청 후 불참 항목은 같은 계층의 교육청 지원금이나 수익자 부담에만 넣을 수 있다. */
+/** 신청 후 불참 항목: 교육청 지원금은 같은 계층만, 기타 지원금과 수익자 부담은 어느 계층이나 넣을 수 있다. */
 export function canTakeAbsentLine(budget, absentLine) {
-  return budget.id === STUDENT_BUDGET_ID || budget.absentGroup === absentLine.group;
+  return !budget.absentGroup || budget.absentGroup === absentLine.group;
 }
 
 /**
@@ -90,12 +90,26 @@ export function proposalBudgets(project, counts) {
       name: `기타 지원금(${support.name || '이름 없음'})`,
       group: 'regular',
       count: counts.regular,
+      absentGroup: null,
+      absentCount: counts.regularAbsent + counts.vulnerableAbsent,
+      // 총액 지원금은 이 금액 안에서만 쓴다(참여 학생에게 쓰고 남은 금액을 불참 학생 공통비에).
+      poolTotal: support.mode === 'total' ? Math.max(0, number(support.amount)) : null,
       memo: String(support.memo ?? ''),
       source: support.source ?? 'school',
       setting: { mode: support.mode === 'total' ? 'total' : 'perPerson', amount: Math.max(0, number(support.amount)) },
       capPerPerson: otherSupportPerPerson(support, counts.regular)
     })),
-    { id: STUDENT_BUDGET_ID, name: '수익자 부담', group: 'regular', count: counts.regular, memo: '', setting: null, capPerPerson: Number.POSITIVE_INFINITY }
+    {
+      id: STUDENT_BUDGET_ID,
+      name: '수익자 부담',
+      group: 'regular',
+      count: counts.regular,
+      absentGroup: null,
+      absentCount: counts.regularAbsent + counts.vulnerableAbsent,
+      memo: '',
+      setting: null,
+      capPerPerson: Number.POSITIVE_INFINITY
+    }
   ];
 }
 
@@ -114,44 +128,18 @@ export function withBudgetAmount(project, budgetId, amount) {
   };
 }
 
-/** 체크한 순서대로 예산을 채운다. */
+const absentKey = (budgetId, group) => `${budgetId}:${group}`;
+
+/** 체크한 순서대로 예산을 채운다. 참여 학생 항목을 먼저, 신청 후 불참 항목을 나중에 채운다. */
 function replay(budgets, lines, absent, allocations) {
   const budgetById = new Map(budgets.map(budget => [budget.id, budget]));
   const lineById = new Map(lines.map(line => [line.id, line]));
   const absentById = new Map(absent.map(line => [line.id, line]));
-  const absentRemaining = new Map(absent.map(line => [line.id, line.perPerson]));
-  const absentUsed = new Map(budgets.map(budget => [budget.id, 0]));
   const remaining = {
     vulnerable: new Map(lines.map(line => [line.id, line.perPerson])),
     regular: new Map(lines.map(line => [line.id, line.perPerson]))
   };
   const used = new Map(budgets.map(budget => [budget.id, 0]));
-
-  // 신청 후 불참 항목: 불참 학생 1인당 지원액(capPerPerson) 안에서 체크한 순서대로 채운다.
-  const absentResults = allocations
-    .filter(item => budgetById.has(item.budgetId) && absentById.has(item.lineId))
-    .filter(item => canTakeAbsentLine(budgetById.get(item.budgetId), absentById.get(item.lineId)))
-    .map(item => {
-      const budget = budgetById.get(item.budgetId);
-      const line = absentById.get(item.lineId);
-      const requested = absentRemaining.get(line.id);
-      const room = budget.capPerPerson - absentUsed.get(budget.id);
-      const perPerson = Math.max(0, Math.min(requested, room));
-      absentRemaining.set(line.id, requested - perPerson);
-      absentUsed.set(budget.id, absentUsed.get(budget.id) + perPerson);
-      return {
-        ...line,
-        budgetId: budget.id,
-        lineId: line.id,
-        absent: true,
-        requested,
-        perPerson,
-        total: perPerson * line.count,
-        left: requested - perPerson,
-        overBudget: perPerson < requested,
-        remainder: requested < line.perPerson
-      };
-    });
 
   const results = allocations
     .filter(item => budgetById.has(item.budgetId) && lineById.has(item.lineId))
@@ -177,7 +165,61 @@ function replay(budgets, lines, absent, allocations) {
         remainder: requested < line.perPerson
       };
     });
-  return { results, absentResults, absentRemaining, absentUsed, remaining, used };
+
+  // 신청 후 불참 항목: 불참 학생 1인당 지원액 안에서(총액 지원금은 남은 총액 안에서) 체크한 순서대로 채운다.
+  const absentRemaining = new Map(absent.map(line => [line.id, line.perPerson]));
+  const absentUsed = new Map();
+  const poolLeft = new Map(budgets
+    .filter(budget => budget.poolTotal !== null && budget.poolTotal !== undefined)
+    .map(budget => [budget.id, budget.poolTotal - used.get(budget.id) * budget.count]));
+  const absentResults = allocations
+    .filter(item => budgetById.has(item.budgetId) && absentById.has(item.lineId))
+    .filter(item => canTakeAbsentLine(budgetById.get(item.budgetId), absentById.get(item.lineId)))
+    .map(item => {
+      const budget = budgetById.get(item.budgetId);
+      const line = absentById.get(item.lineId);
+      const key = absentKey(budget.id, line.group);
+      const requested = absentRemaining.get(line.id);
+      let room = budget.capPerPerson - (absentUsed.get(key) ?? 0);
+      if (poolLeft.has(budget.id)) room = Math.min(room, Math.floor(Math.max(0, poolLeft.get(budget.id)) / line.count));
+      const perPerson = Math.max(0, Math.min(requested, room));
+      absentRemaining.set(line.id, requested - perPerson);
+      absentUsed.set(key, (absentUsed.get(key) ?? 0) + perPerson);
+      if (poolLeft.has(budget.id)) poolLeft.set(budget.id, poolLeft.get(budget.id) - perPerson * line.count);
+      return {
+        ...line,
+        budgetId: budget.id,
+        lineId: line.id,
+        absent: true,
+        requested,
+        perPerson,
+        total: perPerson * line.count,
+        left: requested - perPerson,
+        overBudget: perPerson < requested,
+        remainder: requested < line.perPerson
+      };
+    });
+  return { results, absentResults, absentRemaining, absentUsed, poolLeft, remaining, used };
+}
+
+/**
+ * 한 예산에서 신청 후 불참 학생 몫을 얼마나 썼고 얼마나 남았는지.
+ * 불참 학생이 있는 계층마다 1인당 사용액을 보고, 가장 많이 쓴 계층 기준으로 보여 준다.
+ */
+function absentUsage(budget, counts, absentUsed, poolLeft) {
+  const groups = [['vulnerable', counts.vulnerableAbsent], ['regular', counts.regularAbsent]]
+    .filter(([group, count]) => count > 0 && (!budget.absentGroup || budget.absentGroup === group));
+  const count = groups.reduce((total, [, people]) => total + people, 0);
+  if (!count) return { count: 0, usedPerPerson: 0, unusedPerPerson: null, full: false };
+  const usedPerPerson = Math.max(...groups.map(([group]) => absentUsed.get(absentKey(budget.id, group)) ?? 0));
+  let unusedPerPerson = Number.isFinite(budget.capPerPerson)
+    ? Math.min(...groups.map(([group]) => budget.capPerPerson - (absentUsed.get(absentKey(budget.id, group)) ?? 0)))
+    : null;
+  if (poolLeft.has(budget.id)) {
+    const pooled = Math.floor(Math.max(0, poolLeft.get(budget.id)) / count);
+    unusedPerPerson = unusedPerPerson === null ? pooled : Math.min(unusedPerPerson, pooled);
+  }
+  return { count, usedPerPerson, unusedPerPerson, full: unusedPerPerson !== null && unusedPerPerson <= 0 };
 }
 
 function unassignedLines(lines, pool) {
@@ -218,7 +260,7 @@ export function buildProposal(project) {
   const lines = studentCostLines(project);
   const absent = absentLines(lines, counts);
   const budgets = proposalBudgets(project, counts);
-  const { results, absentResults, absentRemaining, absentUsed, remaining, used } = replay(budgets, lines, absent, plan.allocations);
+  const { results, absentResults, absentRemaining, absentUsed, poolLeft, remaining, used } = replay(budgets, lines, absent, plan.allocations);
 
   const blocks = budgets.map(budget => {
     const usedPerPerson = used.get(budget.id);
@@ -228,9 +270,10 @@ export function buildProposal(project) {
     const absentParts = absentResults.filter(result => result.budgetId === budget.id && result.perPerson > 0);
     const finite = Number.isFinite(budget.capPerPerson);
     const unusedPerPerson = finite ? budget.capPerPerson - usedPerPerson : null;
-    const absentCount = budget.absentCount ?? 0;
-    const absentUsedPerPerson = absentUsed.get(budget.id);
-    const absentUnusedPerPerson = finite && absentCount > 0 ? budget.capPerPerson - absentUsedPerPerson : null;
+    const usage = absentUsage(budget, counts, absentUsed, poolLeft);
+    const absentCount = usage.count;
+    const absentUsedPerPerson = usage.usedPerPerson;
+    const absentUnusedPerPerson = usage.unusedPerPerson;
     const participantTotal = usedPerPerson * budget.count;
     const absentTotal = sumLines(absentParts, 'total');
     return {
@@ -243,9 +286,11 @@ export function buildProposal(project) {
       absentCount,
       absentUsedPerPerson,
       absentUnusedPerPerson,
-      absentFull: absentUnusedPerPerson !== null && absentUnusedPerPerson <= 0,
-      // 예산 총액: (참여 + 신청 후 불참) × 1인당 지원액. 한도가 없는 예산은 null
-      budgetTotal: finite ? budget.capPerPerson * (budget.count + absentCount) : null,
+      absentFull: usage.full,
+      // 예산 총액: (참여 + 신청 후 불참) × 1인당 지원액, 총액 지원금은 그 총액. 한도가 없는 예산은 null
+      budgetTotal: budget.poolTotal !== null && budget.poolTotal !== undefined
+        ? budget.poolTotal
+        : (finite ? budget.capPerPerson * (budget.count + absentCount) : null),
       participantTotal,
       absentTotal,
       total: participantTotal + absentTotal

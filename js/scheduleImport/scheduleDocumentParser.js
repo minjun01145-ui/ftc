@@ -8,7 +8,7 @@ import { parseDetailedScheduleFromTables } from './tableSchedule.js';
  * 세부 일정 표(시간이 있는 표)를 먼저 찾고, 없으면 '주요 경로(➡)' 줄을 쓴다.
  *
  * 결과 items는 체험학습 일정 표의 행 모양과 같다:
- *   { date: 'YYYY-MM-DD', name, arrivalTime, departureTime, address, contact(메모) }
+ *   { date: 'YYYY-MM-DD', place(장소), name, arrivalTime, departureTime, address, contact(메모·비고) }
  */
 export const SCHEDULE_SOURCES = Object.freeze({
   detailedTable: '세부 일정 표',
@@ -29,6 +29,7 @@ export function scheduleItemsFromRows(rows, year) {
   const firstDay = anchor ? addDays(isoDate(year, anchor.monthDay), 1 - anchor.dayNumber) : '';
   return rows.map(row => ({
     date: row.monthDay ? isoDate(year, row.monthDay) : (firstDay && row.dayNumber ? addDays(firstDay, row.dayNumber - 1) : ''),
+    place: row.place ?? '',
     name: row.title,
     arrivalTime: row.start,
     departureTime: row.end,

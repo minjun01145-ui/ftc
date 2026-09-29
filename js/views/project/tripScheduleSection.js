@@ -7,6 +7,7 @@ function scheduleRowHtml(item, tones = new Map()) {
   return `
     <tr data-trip-schedule-row data-schedule-item-id="${escapeHtml(item.id)}" class="${dayToneClass(tones, item.date)}">
       <td><input type="date" data-schedule-field="date" value="${escapeHtml(item.date)}" readonly></td>
+      <td><input type="text" data-schedule-field="place" value="${escapeHtml(item.place ?? '')}" placeholder="예: 서울" readonly></td>
       <td><input type="text" data-schedule-field="name" value="${escapeHtml(item.name)}" readonly></td>
       <td><input type="time" data-schedule-field="arrivalTime" value="${escapeHtml(item.arrivalTime)}" readonly></td>
       <td><input type="time" data-schedule-field="departureTime" value="${escapeHtml(item.departureTime)}" readonly></td>
@@ -22,7 +23,7 @@ function scheduleRowHtml(item, tones = new Map()) {
 
 function scheduleRowsHtml(items) {
   if (!items.length) {
-    return '<tr data-trip-schedule-empty><td colspan="6" class="center">일정이 없습니다.</td></tr>';
+    return '<tr data-trip-schedule-empty><td colspan="7" class="center">일정이 없습니다.</td></tr>';
   }
   const tones = dayToneMap(items.map(item => item.date));
   return items.map(item => scheduleRowHtml(item, tones)).join('');
@@ -48,10 +49,11 @@ function scheduleViewHtml(items) {
   }
   const bodies = groups.map(group => `
     <tbody class="schedule-day ${dayToneClass(tones, group.date)}">
-      <tr class="schedule-day-head"><th colspan="4">${escapeHtml(dayHeading(tones, group.date))}</th></tr>
+      <tr class="schedule-day-head"><th colspan="5">${escapeHtml(dayHeading(tones, group.date))}</th></tr>
       ${group.items.map(item => `
         <tr>
           <td class="schedule-time">${escapeHtml(timeText(item))}</td>
+          <td>${escapeHtml(item.place ?? '')}</td>
           <td class="schedule-name">${escapeHtml(item.name)}</td>
           <td>${escapeHtml(item.address)}</td>
           <td>${escapeHtml(item.contact)}</td>
@@ -60,7 +62,7 @@ function scheduleViewHtml(items) {
   return `
     <div class="table-wrap">
       <table class="compact-table schedule-view-table">
-        <thead><tr><th>시간</th><th>일정/체험처</th><th>주소</th><th>메모(연락처 등)</th></tr></thead>
+        <thead><tr><th>시간</th><th>장소</th><th>일정/체험처</th><th>주소</th><th>메모(비고)</th></tr></thead>
         ${bodies}
       </table>
     </div>`;
@@ -102,7 +104,7 @@ export function renderTripScheduleSection(project) {
       <div class="table-wrap" data-trip-schedule-edit hidden>
         <table class="trip-schedule-table">
           <thead>
-            <tr><th>일자</th><th>일정/체험처</th><th>도착 시간</th><th>나가는 시간</th><th>주소</th><th>메모(연락처 등)</th></tr>
+            <tr><th>일자</th><th>장소</th><th>일정/체험처</th><th>도착 시간</th><th>나가는 시간</th><th>주소</th><th>메모(비고)</th></tr>
           </thead>
           <tbody>${scheduleRowsHtml(items)}</tbody>
         </table>
@@ -162,6 +164,7 @@ export function readTripScheduleSection(section, previousSchedule = { items: [] 
         ...previous,
         id,
         date: value('date'),
+        place: value('place').trim(),
         name: value('name').trim(),
         arrivalTime: value('arrivalTime'),
         departureTime: value('departureTime'),

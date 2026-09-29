@@ -93,6 +93,9 @@ function settingEditor(budget) {
 /** 예) 예산 1인당 100,000원 × 10명(참여 9 + 신청 후 불참 1) = 1,000,000원 */
 function budgetTotalLine(block) {
   if (block.budgetTotal === null || block.absentCount <= 0) return '';
+  if (block.budget.poolTotal !== null && block.budget.poolTotal !== undefined) {
+    return `<p class="budget-card-usage">예산 총액 <strong>${won(block.budgetTotal)}원</strong> · 참여 학생에게 쓰고 남은 금액을 신청 후 불참 공통비에 쓸 수 있습니다.</p>`;
+  }
   const people = block.budget.count + block.absentCount;
   return `<p class="budget-card-usage">예산 1인당 ${won(block.budget.capPerPerson)}원 × ${people}명(참여 ${block.budget.count} + 신청 후 불참 ${block.absentCount}) = <strong>${won(block.budgetTotal)}원</strong></p>`;
 }
@@ -421,6 +424,7 @@ export function renderProposalSection(project) {
       </fieldset>
       <fieldset class="section-fieldset">
         <legend>예산별 품의 내용</legend>
+        <div class="toolbar no-print"><span class="spacer"></span><button type="button" data-action="copy-table" data-copy-target=".proposal-table">표 복사(한글에 붙여넣기)</button></div>
         ${proposalTable(proposal)}
       </fieldset>
       <div class="page-actions no-print"><button type="button" data-action="print">인쇄</button></div>

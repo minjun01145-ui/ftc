@@ -65,7 +65,7 @@ test('인솔자 초안: 체험처를 그대로 가져오고 버스비 1인당·�
   assert.ok(draft.every(row => row.id));
 });
 
-test('일정은 저장 상태에서 날짜별로 묶은 보기 표로 보이고 메모(연락처 등) 칸을 쓴다', () => {
+test('일정은 저장 상태에서 날짜별로 묶은 보기 표로 보이고 메모(비고) 칸을 쓴다', () => {
   const project = createProject();
   project.tripSchedule.items = [
     { id: 'a', date: '2026-05-13', name: '롯데월드', arrivalTime: '10:00', departureTime: '17:00', address: '서울 송파구', contact: '02-000-0000' },
@@ -76,7 +76,8 @@ test('일정은 저장 상태에서 날짜별로 묶은 보기 표로 보이고 
   assert.match(html, /2일차 · 5월 14일\(목\)/);
   assert.match(html, /10:00 ~ 17:00/);
   assert.match(html, /09:00 도착/);
-  assert.match(html, /메모\(연락처 등\)/);
+  assert.match(html, /메모\(비고\)/);
+  assert.match(html, /<th>장소<\/th>/);
   assert.doesNotMatch(html, /관계자 연락처/);
   assert.match(html, /data-trip-schedule-edit hidden/);
 });

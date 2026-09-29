@@ -8,6 +8,7 @@ export const PROJECT_SECTION = Object.freeze({
   PRE_TRIP: 'preTrip',
   PROPOSAL: 'proposal',
   VERIFY: 'verify',
+  FORMS: 'forms',
   REPORT: 'report',
   SETTLEMENT: 'settlement'
 });
@@ -20,6 +21,7 @@ export const PROJECT_SECTION_ITEMS = Object.freeze([
   { key: PROJECT_SECTION.PRE_TRIP, label: '학생 1인별 금액 산출내역 보기' },
   { key: PROJECT_SECTION.PROPOSAL, label: '품의 도우미(예산 배정)' },
   { key: PROJECT_SECTION.VERIFY, label: '검증 도우미' },
+  { key: PROJECT_SECTION.FORMS, label: '양식 생성기' },
   { key: PROJECT_SECTION.SETTLEMENT, label: '정산' }
 ]);
 
