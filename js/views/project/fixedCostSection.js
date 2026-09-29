@@ -16,6 +16,26 @@ function countsOf(project) {
   return { participants: c.participants, dayAbsent: c.contractedAbsent, chaperones: c.chaperones };
 }
 
+function sharedSummary({ sharedPeople, sharedNote, headcount }) {
+  if (sharedPeople > 0) return `다른 학년 +${sharedPeople}명${sharedNote ? ` (${sharedNote})` : ''}`;
+  if (headcount) return `계산 인원 ${headcount}명(직접 입력)`;
+  return '';
+}
+
+/** 다른 학년과 함께 계산: 더한 인원 표시와 열기/해제 버튼. 값은 숨은 칸에 두고 저장할 때 읽는다. */
+function sharedCountHtml(entry, disabled) {
+  const summary = sharedSummary(entry);
+  return `
+    <div class="shared-count" data-shared-count>
+      <input type="hidden" data-fixed-field="sharedPeople" value="${entry.sharedPeople || ''}">
+      <input type="hidden" data-fixed-field="sharedNote" value="${escapeHtml(entry.sharedNote)}">
+      <input type="hidden" data-fixed-field="headcount" value="${entry.headcount ?? ''}">
+      <span class="shared-summary" data-shared-summary ${summary ? '' : 'hidden'}>${escapeHtml(summary)}</span>
+      <button type="button" class="small-button" data-action="open-shared-count" data-total-only ${disabled}>${summary ? '변경' : '다른 학년과 함께 계산'}</button>
+      <button type="button" class="small-button" data-action="clear-shared-count" data-total-only ${summary ? '' : 'hidden'} ${disabled}>해제</button>
+    </div>`;
+}
+
 function modeCell(entry) {
   const options = Object.entries(FIXED_COST_MODES)
     .map(([mode, label]) => `<option value="${mode}" ${mode === entry.mode ? 'selected' : ''}>${label}</option>`)
@@ -30,9 +50,7 @@ function modeCell(entry) {
       <label class="check-label" title="1인당 금액의 1원 단위를 버리고 10원 단위로 맞춥니다">
         <input type="checkbox" data-fixed-field="roundTo10" data-total-only ${entry.roundTo10 ? 'checked' : ''} ${disabled}> 1원 단위 버림
       </label>
-      <label class="check-label" title="1·3학년이 버스를 같이 타는 경우처럼 다른 사업 인원까지 합친 전체 인원으로 나눌 때 입력합니다. 비워 두면 이 사업 인원으로 나눕니다.">
-        계산 인원 <input type="number" min="0" step="1" class="headcount-input" data-fixed-field="headcount" data-total-only value="${entry.headcount ?? ''}" placeholder="자동" ${disabled} aria-label="계산 인원">명
-      </label>
+      ${sharedCountHtml(entry, disabled)}
       <label class="check-label" title="신청 후 불참자도 이 비용을 부담합니다">
         <input type="checkbox" data-fixed-field="commonCost" ${entry.commonCost ? 'checked' : ''}> 공통비
       </label>
@@ -134,7 +152,110 @@ export function readFixedCostInputs(form, previousFixedCosts) {
       roundTo10: mode === 'total' ? field('roundTo10').checked : before.roundTo10,
       commonCost: field('commonCost').checked,
       headcount: mode === 'total' ? field('headcount').value : before.headcount,
+      sharedPeople: mode === 'total' ? field('sharedPeople').value : before.sharedPeople,
+      sharedNote: mode === 'total' ? field('sharedNote').value : before.sharedNote,
       memo: field('memo').value.trim()
     };
   }));
+}
+
+/* ---------- 다른 학년과 함께 계산 ---------- */
+
+/**
+ * 내 사업 중 다른 사업의 같은 기타비(버스비 등)를 탈 인원.
+ * 그 사업의 설정을 따른다: 인솔자도 함께 부담이면 인솔자, 공통비이고 신청 후 불참자 공통비 부담이면 불참자도 센다.
+ */
+export function sharedCandidates(projects, currentProjectId, row) {
+  const builtin = row.dataset.builtin;
+  const label = row.querySelector('[data-fixed-field="label"]')?.value.trim() ?? row.querySelector('th')?.textContent.trim();
+  const fallback = {
+    includeChaperones: row.querySelector('[data-fixed-field="includeChaperones"]')?.checked ?? false,
+    commonCost: row.querySelector('[data-fixed-field="commonCost"]')?.checked ?? false
+  };
+  return projects
+    .filter(project => project.id !== currentProjectId)
+    .map(project => {
+      const match = normalizeFixedCosts(project.fixedCosts).find(entry => (builtin ? entry.builtin === builtin : entry.label === label));
+      const settings = match ?? fallback;
+      const c = projectCounts(project);
+      const absent = settings.commonCost && project.dayAbsentSharesCommonCost ? c.contractedAbsent : 0;
+      const chaperones = settings.includeChaperones ? c.chaperones : 0;
+      const parts = [`학생 ${c.participants}명`];
+      if (absent > 0) parts.push(`신청 후 불참 ${absent}명`);
+      if (chaperones > 0) parts.push(`인솔자 ${chaperones}명`);
+      return { id: project.id, title: project.title, people: c.participants + absent + chaperones, detail: parts.join(' + ') };
+    });
+}
+
+function sharedPanelHtml(candidates) {
+  const list = candidates.length
+    ? `<ul class="shared-candidates">${candidates.map(item => `
+        <li><label><input type="checkbox" data-shared-candidate value="${escapeHtml(item.id)}" data-people="${item.people}" data-title="${escapeHtml(item.title)}">
+          <strong>${escapeHtml(item.title)}</strong> ${item.people}명 <small>(${escapeHtml(item.detail)})</small></label></li>`).join('')}</ul>
+      <button type="button" class="small-button" data-action="apply-shared-projects">가져오기</button>`
+    : '<p class="help">내 사업에 다른 사업이 없습니다. 다른 학년 사업을 먼저 만들거나 직접 입력하세요.</p>';
+  return `
+    <tr class="shared-panel-row" data-shared-panel>
+      <td colspan="7">
+        <div class="shared-panel">
+          <div class="shared-option">
+            <h4>내 사업에서 가져오기</h4>
+            ${list}
+          </div>
+          <div class="shared-option">
+            <h4>직접 입력</h4>
+            <label>함께 계산할 다른 학년 인원 <input type="number" min="1" step="1" class="headcount-input" data-shared-manual>명</label>
+            <button type="button" class="small-button" data-action="apply-shared-manual">적용</button>
+          </div>
+          <button type="button" class="small-button shared-close" data-action="close-shared-count">닫기</button>
+        </div>
+      </td>
+    </tr>`;
+}
+
+export function openSharedPanel(button, candidates) {
+  const row = button.closest('[data-fixed-row]');
+  if (!row) return;
+  const next = row.nextElementSibling;
+  if (next?.matches('[data-shared-panel]')) {
+    next.remove();
+    return;
+  }
+  row.insertAdjacentHTML('afterend', sharedPanelHtml(candidates));
+}
+
+export function closeSharedPanel(button) {
+  button.closest('[data-shared-panel]')?.remove();
+}
+
+/** 패널에서 고른 인원을 해당 기타비 행의 숨은 칸에 넣는다. 값을 넣었으면 true. */
+export function applySharedCount(button, mode) {
+  const panel = button.closest('[data-shared-panel]');
+  const row = panel?.previousElementSibling;
+  if (!row?.matches('[data-fixed-row]')) return false;
+  let people = 0;
+  let note = '';
+  if (mode === 'projects') {
+    const picked = [...panel.querySelectorAll('[data-shared-candidate]:checked')];
+    people = picked.reduce((sum, input) => sum + Number(input.dataset.people || 0), 0);
+    note = picked.map(input => `${input.dataset.title} ${input.dataset.people}명`).join(', ');
+  } else {
+    people = Math.max(0, Math.floor(Number(panel.querySelector('[data-shared-manual]')?.value) || 0));
+    note = '직접 입력';
+  }
+  if (people <= 0) return false;
+  setSharedFields(row, people, note);
+  panel.remove();
+  return true;
+}
+
+export function clearSharedCount(button) {
+  const row = button.closest('[data-fixed-row]');
+  if (row) setSharedFields(row, 0, '');
+}
+
+function setSharedFields(row, people, note) {
+  row.querySelector('[data-fixed-field="sharedPeople"]').value = people ? String(people) : '';
+  row.querySelector('[data-fixed-field="sharedNote"]').value = note;
+  row.querySelector('[data-fixed-field="headcount"]').value = '';
 }

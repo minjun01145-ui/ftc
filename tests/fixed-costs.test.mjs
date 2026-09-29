@@ -4,6 +4,7 @@ import { applyCostMethod, costInputAmount, costMethodOf, costMethodOptions } fro
 import { calculateExpenses } from '../js/engine.js';
 import {
   createCustomFixedCost,
+  fixedCostBasisText,
   fixedCostBreakdown,
   fixedCostExpenses,
   fixedCostStaffShares,
@@ -136,4 +137,16 @@ test('버스비 계산 인원을 직접 넣으면 그 인원으로 나누고, �
   const tooSmall = fixedCostBreakdown({ ...bus, headcount: 10 }, { participants: 70, dayAbsent: 0, chaperones: 8 });
   assert.equal(tooSmall.divisor, 78, '이 사업 인원보다 적게는 나누지 않는다');
   assert.equal(entryOf({ bus: { mode: 'total', amount: 1, headcount: '' } }, 'bus').headcount, null);
+});
+
+test('다른 학년과 함께 계산하면 그 인원을 더해 나누고, 이 사업 인원이 바뀌어도 더한 인원은 그대로다', () => {
+  const bus = entryOf({ bus: { mode: 'total', amount: 9_000_000, includeChaperones: true, sharedPeople: 72, sharedNote: '1학년 수학여행 72명' } }, 'bus');
+  assert.equal(bus.sharedPeople, 72);
+  assert.equal(bus.sharedNote, '1학년 수학여행 72명');
+  const breakdown = fixedCostBreakdown(bus, { participants: 70, dayAbsent: 0, chaperones: 8 });
+  assert.equal(breakdown.divisor, 150);
+  assert.equal(breakdown.perPerson, 60000);
+  assert.equal(breakdown.otherTotal, 4_320_000);
+  assert.match(fixedCostBasisText(breakdown), /계산 인원 150명\(이 사업 학생 70명 \+ 인솔자 8명, 다른 학년 72명 포함\)/);
+  assert.equal(fixedCostBreakdown(bus, { participants: 60, dayAbsent: 0, chaperones: 8 }).divisor, 140);
 });

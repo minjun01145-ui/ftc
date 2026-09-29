@@ -141,20 +141,20 @@ export function renderHeadcountSection(project, school = {}) {
         <label for="vulnerableDayAbsentStudents">신청 후 불참(취약계층)</label>
         <input id="vulnerableDayAbsentStudents" name="vulnerableDayAbsentStudents" type="number" min="0" step="1" value="${number(values.vulnerableDayAbsent)}" data-headcount-input>
 
-        <label class="checkbox-label" for="dayAbsentSharesCommonCost">
+        <span></span>
+        <label class="checkbox-label inline-check" for="dayAbsentSharesCommonCost">
           <input id="dayAbsentSharesCommonCost" name="dayAbsentSharesCommonCost" type="checkbox" ${project.dayAbsentSharesCommonCost ? 'checked' : ''}>
           신청 후 불참자 공통비 부담
         </label>
-        <span></span>
         <label for="notAppliedStudents">불참(미신청)</label>
         <input id="notAppliedStudents" type="number" readonly tabindex="-1" value="${escapeHtml(notApplied)}">
 
-        <label for="participantsSummary">실제 참여</label>
-        <output id="participantsSummary" class="headcount-summary" data-participants-summary>${participantsText(participants)}</output>
-        <span></span><span></span>
-
         <label for="chaperones">인솔자 수</label>
         <input id="chaperones" name="chaperones" type="number" min="0" step="1" value="${number(values.chaperones)}">
+        <span></span><span></span>
+
+        <label for="participantsSummary">실제 참여</label>
+        <output id="participantsSummary" class="headcount-summary" data-participants-summary>${participantsText(participants)}</output>
       </div>
     </fieldset>`;
 }

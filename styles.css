@@ -328,8 +328,18 @@ table input[type="text"] { min-width: 150px; }
 .project-delete:hover { background: #f2d4d4; color: #b00020; }
 .project-copy { border: 0; background: transparent; color: #555; padding: 0 6px; font-size: 12px; }
 .project-copy:hover { background: #dde8f3; color: #1f4f7a; }
-.project-heading-actions { display: flex; gap: 4px; }
-.project-heading-actions button { font-weight: normal; }
+/* 다른 학년과 함께 계산 */
+.shared-count { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.shared-summary { font-size: 12px; color: #1f4f7a; }
+.shared-panel-row td { background: #f3f8fc; }
+.shared-panel { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px 28px; padding: 6px 4px; }
+.shared-option h4 { margin: 0 0 6px; font-size: 13px; }
+.shared-candidates { list-style: none; margin: 0 0 6px; padding: 0; }
+.shared-candidates li { padding: 2px 0; }
+.shared-candidates input { width: auto; min-width: 0; }
+.shared-candidates small { color: #555; }
+.shared-close { margin-left: auto; }
+.inline-check { justify-content: flex-start; white-space: nowrap; }
 .project-submenu {
   border-top: 1px solid #d4d4d4;
   background: #f8f8f8;
@@ -603,5 +613,5 @@ tr[class*="day-tone-"] > td:first-child { box-shadow: inset 4px 0 0 var(--day-to
 .budget-checklist-head { margin: 6px 12px 0; padding-top: 6px; border-top: 1px solid #ddd; font-size: 13px; color: #7a4a00; }
 .absent-checklist { flex: 0; }
 .budget-formula { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; margin-left: auto; }
-.fixed-cost-mode .headcount-input { width: 70px; min-width: 0; }
+input.headcount-input { width: 80px; min-width: 0; }
 .headcount-summary { align-self: center; font-weight: bold; }

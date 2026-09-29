@@ -26,14 +26,22 @@ import { readProjectForm, renderProjectPage } from './views/projectView.js';
 import { newAdminRowHtml, newManualRowHtml, newSourceRowHtml, readWorkflowForm } from './views/project/workflowSection.js';
 import { gradeStudentCount, headcountIssues, refreshHeadcountSummary } from './views/project/headcountSection.js';
 import { addOtherSupportRow, moveOtherSupportRow, removeOtherSupportRow } from './views/project/budgetSection.js';
-import { addFixedCostRow, removeFixedCostRow, syncFixedCostModeControls } from './views/project/fixedCostSection.js';
+import {
+  addFixedCostRow,
+  applySharedCount,
+  clearSharedCount,
+  closeSharedPanel,
+  openSharedPanel,
+  removeFixedCostRow,
+  sharedCandidates,
+  syncFixedCostModeControls
+} from './views/project/fixedCostSection.js';
 import { renderProjectList } from './views/sidebarView.js';
 import { readSchoolForm, renderSchoolPage } from './views/schoolView.js';
 
 const main = document.querySelector('#main');
 const projectList = document.querySelector('#projectList');
 const addProjectBtn = document.querySelector('#addProjectBtn');
-const pasteProjectBtn = document.querySelector('#pasteProjectBtn');
 const exportBtn = document.querySelector('#exportBtn');
 const importInput = document.querySelector('#importInput');
 const message = document.querySelector('#message');
@@ -43,8 +51,6 @@ let currentPage = { type: 'school', projectId: null, section: null };
 let dirty = false;
 let messageTimer;
 let schoolSearchRequestId = 0;
-// '복사'를 누른 사업의 저장된 내용. 붙여넣기를 누르면 새 사업으로 만든다.
-let copiedProject = null;
 const schoolStudentLookup = createSchoolStudentLookup(getSchoolStudentCounts);
 
 // 저장하지 않은 변경이 있으면 저장 버튼을 눈에 띄게 바꾼다(body.has-unsaved).
@@ -398,24 +404,22 @@ function deleteProject(projectId) {
   showMessage('사업을 삭제했습니다.');
 }
 
+// 저장된 내용으로 새 사업 '○○ (복사)'를 만든다.
 function copyProject(projectId) {
-  const project = getState().projects.find(item => item.id === projectId);
-  if (!project) return;
-  copiedProject = structuredClone(project);
-  pasteProjectBtn.disabled = false;
-  const unsaved = currentPage.projectId === projectId && dirty ? ' 저장하지 않은 변경사항은 복사되지 않았습니다.' : '';
-  showMessage(`'${project.title}' 사업을 복사했습니다. 내 사업의 붙여넣기를 누르면 새 사업으로 만듭니다.${unsaved}`);
-}
-
-pasteProjectBtn.addEventListener('click', () => {
-  if (!copiedProject || !canDiscardChanges()) return;
-  const project = { ...structuredClone(copiedProject), id: createProject().id, title: `${copiedProject.title} (복사)` };
-  updateState(state => { state.projects.push(project); });
+  const source = getState().projects.find(item => item.id === projectId);
+  if (!source) return;
+  if (!confirm(`'${source.title}' 사업을 복사할까요?`)) return;
+  if (!canDiscardChanges()) return;
+  const project = { ...structuredClone(source), id: createProject().id, title: `${source.title} (복사)` };
+  updateState(state => {
+    const index = state.projects.findIndex(item => item.id === projectId);
+    state.projects.splice(index + 1, 0, project);
+  });
   persistState();
   currentPage = projectPage(project.id);
   render();
   showMessage(`'${project.title}' 사업을 만들었습니다. 사업명과 학년을 바꿔 주세요.`);
-});
+}
 
 projectList.addEventListener('click', event => {
   const copyButton = event.target.closest('[data-copy-project-id]');
@@ -738,6 +742,33 @@ main.addEventListener('click', event => {
 
   if (action === 'proposal-clear-budget') {
     proposal.clearBudget(button.dataset.budgetId);
+    return;
+  }
+
+  if (action === 'open-shared-count') {
+    const row = button.closest('[data-fixed-row]');
+    openSharedPanel(button, sharedCandidates(getState().projects, currentPage.projectId, row));
+    return;
+  }
+
+  if (action === 'close-shared-count') {
+    closeSharedPanel(button);
+    return;
+  }
+
+  // 다른 학년 인원을 넣거나 빼면 바로 저장해 1인당 금액을 다시 계산한다.
+  if (action === 'apply-shared-projects' || action === 'apply-shared-manual') {
+    if (!applySharedCount(button, action === 'apply-shared-projects' ? 'projects' : 'manual')) {
+      showMessage(action === 'apply-shared-projects' ? '함께 계산할 사업을 선택해 주세요.' : '함께 계산할 인원을 입력해 주세요.');
+      return;
+    }
+    if (form) saveProject(form, '다른 학년 인원을 더해 1인당 금액을 다시 계산하고 저장했습니다.');
+    return;
+  }
+
+  if (action === 'clear-shared-count') {
+    clearSharedCount(button);
+    if (form) saveProject(form, '다른 학년과 함께 계산을 해제하고 저장했습니다.');
     return;
   }
 
