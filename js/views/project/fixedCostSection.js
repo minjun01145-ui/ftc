@@ -30,6 +30,9 @@ function modeCell(entry) {
       <label class="check-label" title="1인당 금액의 1원 단위를 버리고 10원 단위로 맞춥니다">
         <input type="checkbox" data-fixed-field="roundTo10" data-total-only ${entry.roundTo10 ? 'checked' : ''} ${disabled}> 1원 단위 버림
       </label>
+      <label class="check-label" title="신청 후 불참자도 이 비용을 부담합니다">
+        <input type="checkbox" data-fixed-field="commonCost" ${entry.commonCost ? 'checked' : ''}> 공통비
+      </label>
     </div>`;
 }
 
@@ -75,6 +78,8 @@ export function renderFixedCostTable(project) {
       <div class="block-head">
         <h3>기타비</h3>
         <button type="button" class="small-button" data-action="add-fixed-cost">기타비 항목 추가</button>
+        <span class="spacer"></span>
+        <button type="button" class="save-button" data-action="save-student-expenses">저장</button>
       </div>
       <div class="table-wrap">
         <table class="compact-table fixed-cost-table">
@@ -124,6 +129,7 @@ export function readFixedCostInputs(form, previousFixedCosts) {
       // 1인당 금액일 때는 체크박스가 꺼져 있으므로 이전 선택을 유지한다.
       includeChaperones: mode === 'total' ? field('includeChaperones').checked : before.includeChaperones,
       roundTo10: mode === 'total' ? field('roundTo10').checked : before.roundTo10,
+      commonCost: field('commonCost').checked,
       memo: field('memo').value.trim()
     };
   }));

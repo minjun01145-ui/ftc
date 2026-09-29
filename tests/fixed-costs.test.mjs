@@ -31,6 +31,15 @@ test('기타비는 기본 항목(버스·숙소·보험) 뒤에 사용자 항목
   assert.equal(withCustom[3].commonCost, false);
 });
 
+test('기타비의 공통비 체크를 켜면 신청 후 불참자도 그 항목을 부담한다', () => {
+  const guard = normalizeFixedCosts([{ id: 'guard', label: '안전요원', mode: 'total', amount: 710000, commonCost: true }])
+    .find(entry => entry.id === 'guard');
+  assert.equal(guard.commonCost, true);
+  assert.equal(fixedCostBreakdown(guard, counts, { dayAbsentSharesCommonCost: true }).students, 71);
+  const lodging = entryOf([{ builtin: 'lodging', commonCost: false, mode: 'total', amount: 700000 }], 'lodging');
+  assert.equal(fixedCostBreakdown(lodging, counts, { dayAbsentSharesCommonCost: true }).students, 70, '숙소비도 공통비 체크를 끌 수 있다');
+});
+
 test('전체 계약액: 인솔자도 함께 부담이면 학생+인솔자로 나누고, 1원 단위 버림이면 10원 단위로 맞춘다', () => {
   const options = { dayAbsentSharesCommonCost: true };
   const bus = entryOf({ bus: { mode: 'total', amount: 9_000_000, includeChaperones: true, roundTo10: true } }, 'bus');

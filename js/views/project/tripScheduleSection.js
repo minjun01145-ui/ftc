@@ -95,7 +95,7 @@ export function renderTripScheduleSection(project) {
         <span class="spacer"></span>
         <button type="button" data-action="add-schedule-item">일정 항목 추가</button>
         <button type="button" data-action="edit-trip-schedule" ${hasItems ? '' : 'disabled'}>수정</button>
-        <button type="button" data-action="save-trip-schedule" disabled>저장</button>
+        <button type="button" class="save-button" data-action="save-trip-schedule">저장</button>
       </div>
       <p class="schedule-source" data-trip-schedule-source ${sourceText ? '' : 'hidden'}>${escapeHtml(sourceText)}</p>
       <div data-trip-schedule-view>${scheduleViewHtml(items)}</div>
@@ -126,12 +126,10 @@ export function setTripScheduleEditing(section, editing) {
   });
 
   const editButton = section.querySelector('[data-action="edit-trip-schedule"]');
-  const saveButton = section.querySelector('[data-action="save-trip-schedule"]');
   if (editButton) {
     editButton.disabled = editing;
     editButton.textContent = editing ? '수정 중' : '수정';
   }
-  if (saveButton) saveButton.disabled = !editing;
 }
 
 /** 입력 표의 tbody. 보기 표에도 tbody가 있으므로 반드시 이 함수로 찾는다. */

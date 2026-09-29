@@ -71,7 +71,7 @@ test('당일 불참자는 1인당 금액에서 빠지고 학생 총액에는 포
   assert.equal(next.actualParticipants, 68);
   assert.equal(rows.find(row => row.id === 'per').studentTotal, 68_000);
   assert.equal(rows.find(row => row.id === 'total').studentTotal, 70_000);
-  assert.deepEqual(headcountIssues({ totalStudents: 71, participants: 70, dayAbsent: 2, vulnerableParticipants: 0 }).length, 1);
+  assert.deepEqual(headcountIssues({ totalStudents: 71, participants: 70, regularDayAbsent: 2, vulnerableParticipants: 0 }).length, 1);
   assert.doesNotMatch(renderHeadcountSection(next, school), /실제 참여 학생 중 취약계층은/);
 });
 
@@ -80,4 +80,33 @@ test('참여 인원이 학년 학생수나 참여자보다 많으면 저장하�
   assert.match(headcountIssues({ totalStudents: 71, participants: 10, vulnerableParticipants: 11 })[0], /취약계층/);
   assert.match(headcountIssues({ totalStudents: 0, participants: 5, vulnerableParticipants: 0 })[0], /학년/);
   assert.deepEqual(headcountIssues({ totalStudents: 71, participants: 70, vulnerableParticipants: 17 }), []);
+});
+
+test('신청 후 불참은 취약/비취약으로 나누어 받고, 나머지는 불참(미신청)이다', () => {
+  const project = createProject();
+  const form = fakeForm({
+    grade: '2', totalStudents: '72', actualParticipants: '70', vulnerableParticipants: '17',
+    dayAbsentStudents: '1', vulnerableDayAbsentStudents: '0', dayAbsentSharesCommonCost: 'on'
+  });
+  const next = readProjectForm(form, project);
+  const summary = summarizeAttendance(next.workflow.attendance, next.totalStudents);
+
+  assert.equal(summary.participants, 70);
+  assert.equal(summary.vulnerableParticipants, 17);
+  assert.equal(summary.regularParticipants, 53);
+  assert.equal(summary.regularAbsent, 1);
+  assert.equal(summary.vulnerableAbsent, 0);
+  assert.deepEqual(summary.issues, []);
+  assert.equal(next.regularContractedAbsent, 1);
+  assert.match(renderHeadcountSection(next, { grade2Students: 72 }), /id="notAppliedStudents"[^>]*value="1"/);
+
+  const vulnerable = readProjectForm(fakeForm({
+    grade: '2', totalStudents: '72', actualParticipants: '70', vulnerableParticipants: '17',
+    dayAbsentStudents: '0', vulnerableDayAbsentStudents: '1'
+  }), project);
+  const vSummary = summarizeAttendance(vulnerable.workflow.attendance, vulnerable.totalStudents);
+  assert.equal(vSummary.vulnerableParticipants, 17);
+  assert.equal(vSummary.vulnerableAbsent, 1);
+  assert.equal(vSummary.regularParticipants, 53);
+  assert.deepEqual(vSummary.issues, []);
 });

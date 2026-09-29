@@ -44,6 +44,12 @@ let messageTimer;
 let schoolSearchRequestId = 0;
 const schoolStudentLookup = createSchoolStudentLookup(getSchoolStudentCounts);
 
+// 저장하지 않은 변경이 있으면 저장 버튼을 눈에 띄게 바꾼다(body.has-unsaved).
+function setDirty(value) {
+  dirty = value;
+  document.body.classList.toggle('has-unsaved', value);
+}
+
 function currentProject() {
   return getState().projects.find(item => item.id === currentPage.projectId) ?? null;
 }
@@ -77,7 +83,7 @@ const tripSchedule = createTripScheduleController({
   getSchoolYear: () => getState().school.schoolYear,
   saveProject: replaceCurrentProject,
   isFormAttached: form => main.contains(form),
-  markDirty: () => { dirty = true; },
+  markDirty: () => setDirty(true),
   showMessage
 });
 
@@ -105,7 +111,7 @@ function render() {
 
   if (currentPage.type === 'school') {
     main.innerHTML = renderSchoolPage(state.school);
-    dirty = false;
+    setDirty(false);
     return;
   }
 
@@ -119,7 +125,7 @@ function render() {
   main.innerHTML = renderProjectPage(project, state.school, currentPage.section);
   updateExpenseRowButtons(main.querySelector('#studentExpenseTableBody'));
   updateExpenseRowButtons(main.querySelector('#staffExpenseTableBody'));
-  dirty = false;
+  setDirty(false);
 }
 
 function canDiscardChanges() {
@@ -257,7 +263,7 @@ async function lookupSchoolStudents(form) {
         form.querySelector('[name="grade2Students"]').value = String(result.counts.grade2Students);
         form.querySelector('[name="grade3Students"]').value = String(result.counts.grade3Students);
         updateSchoolTotal(form);
-        dirty = true;
+        setDirty(true);
       }
     });
     if (!outcome.applied) return;
@@ -272,14 +278,20 @@ function saveProject(form, messageText = '저장했습니다.') {
   const project = state.projects.find(item => item.id === currentPage.projectId);
   if (!project) return;
 
-  const nextProject = readProjectForm(form, project);
+  let nextProject = readProjectForm(form, project);
+  const withSchedule = tripSchedule.applyTo(form, nextProject);
+  if (withSchedule) {
+    nextProject = withSchedule;
+    messageText = '체험학습 일정을 저장하고 체험처/비용에 반영했습니다.';
+  }
   if (form.querySelector('[name="actualParticipants"]')) {
     const attendance = nextProject.workflow?.attendance ?? {};
     const issues = headcountIssues({
       totalStudents: nextProject.totalStudents,
-      participants: attendance.applicants - attendance.regularDayAbsent,
-      dayAbsent: attendance.regularDayAbsent,
-      vulnerableParticipants: attendance.vulnerableEnrolled
+      participants: attendance.applicants - attendance.regularDayAbsent - attendance.vulnerableDayAbsent,
+      regularDayAbsent: attendance.regularDayAbsent,
+      vulnerableDayAbsent: attendance.vulnerableDayAbsent,
+      vulnerableParticipants: attendance.vulnerableEnrolled - attendance.vulnerableDayAbsent
     });
     if (issues.length) {
       showMessage(issues[0]);
@@ -442,7 +454,7 @@ main.addEventListener('input', event => {
     return;
   }
 
-  dirty = true;
+  setDirty(true);
   if (target.form?.id === 'schoolForm' && target.name === 'name') {
     schoolStudentLookup.invalidate();
     clearSelectedSchool(target.form);
@@ -486,7 +498,7 @@ main.addEventListener('change', event => {
     return;
   }
 
-  dirty = true;
+  setDirty(true);
 
   if (target.id === 'educationOffice') {
     schoolSearchRequestId += 1;
@@ -553,7 +565,7 @@ main.addEventListener('click', event => {
     form.querySelector('#schoolSearchResults').innerHTML = '';
     form.querySelector('#schoolSearchStatus').textContent = `${button.dataset.schoolName ?? '학교'}를 선택했습니다.`;
     setSchoolStatus(form, '학교를 선택했습니다. 학생수를 조회하고 있습니다.');
-    dirty = true;
+    setDirty(true);
     void lookupSchoolStudents(form);
     return;
   }
@@ -574,7 +586,7 @@ main.addEventListener('click', event => {
   }
 
   if (action === 'save-trip-schedule' && form) {
-    tripSchedule.save(form);
+    saveProject(form, '사업정보를 저장했습니다.');
     return;
   }
 
@@ -591,13 +603,13 @@ main.addEventListener('click', event => {
   if (action === 'add-source' && form?.dataset.projectView === PROJECT_SECTION.WORKFLOW) {
     form.querySelector('.resource-list')?.insertAdjacentHTML('beforeend', newSourceRowHtml());
     form.querySelector('.resource-list .empty')?.remove();
-    dirty = true;
+    setDirty(true);
     return;
   }
 
   if (action === 'delete-source' && form?.dataset.projectView === PROJECT_SECTION.WORKFLOW) {
     button.closest('[data-resource-row]')?.remove();
-    dirty = true;
+    setDirty(true);
     return;
   }
 
@@ -605,13 +617,13 @@ main.addEventListener('click', event => {
     const tbody = form.querySelector('.admin-entry-table tbody');
     tbody?.querySelector('[data-admin-empty]')?.remove();
     tbody?.insertAdjacentHTML('beforeend', newAdminRowHtml(getState().projects.find(item => item.id === currentPage.projectId)));
-    dirty = true;
+    setDirty(true);
     return;
   }
 
   if (action === 'delete-admin-entry' && form?.dataset.projectView === PROJECT_SECTION.WORKFLOW) {
     button.closest('[data-admin-row]')?.remove();
-    dirty = true;
+    setDirty(true);
     return;
   }
 
@@ -621,14 +633,14 @@ main.addEventListener('click', event => {
     if (project && tbody) {
       tbody.querySelector('[data-manual-empty]')?.remove();
       tbody.insertAdjacentHTML('beforeend', newManualRowHtml(project));
-      dirty = true;
+      setDirty(true);
     }
     return;
   }
 
   if (action === 'delete-manual-allocation' && form?.dataset.projectView === PROJECT_SECTION.WORKFLOW) {
     button.closest('[data-manual-row]')?.remove();
-    dirty = true;
+    setDirty(true);
     return;
   }
 
@@ -666,19 +678,19 @@ main.addEventListener('click', event => {
 
   if (action === 'add-other-support') {
     addOtherSupportRow(button.closest('[data-budget-section]'));
-    dirty = true;
+    setDirty(true);
     return;
   }
 
   if (action === 'delete-other-support') {
     removeOtherSupportRow(button);
-    dirty = true;
+    setDirty(true);
     return;
   }
 
   if (action === 'move-other-support-up' || action === 'move-other-support-down') {
     moveOtherSupportRow(button, action === 'move-other-support-up' ? 'up' : 'down');
-    dirty = true;
+    setDirty(true);
     return;
   }
 
@@ -701,17 +713,18 @@ main.addEventListener('click', event => {
 
   if (action === 'add-fixed-cost') {
     addFixedCostRow(button);
-    dirty = true;
+    setDirty(true);
     return;
   }
 
   if (action === 'delete-fixed-cost') {
     removeFixedCostRow(button);
-    dirty = true;
+    setDirty(true);
     return;
   }
 
   const saveActions = {
+    'save-all': '이 페이지의 내용을 모두 저장했습니다.',
     'save-business': '사업정보를 저장했습니다.',
     'save-headcount': '인원 정보를 저장했습니다.',
     'save-budget': '예산 정보를 저장했습니다.',
@@ -729,7 +742,7 @@ main.addEventListener('click', event => {
     if (!project) return;
     const kind = button.dataset.expenseKind === 'staff' ? 'staff' : 'student';
     addExpenseRow(tbody, project.startDate ?? '', kind);
-    dirty = true;
+    setDirty(true);
     return;
   }
 
@@ -742,20 +755,20 @@ main.addEventListener('click', event => {
     // 아직 저장하지 않은 학생용 표와 기타비 입력도 초안에 반영한다.
     const draft = buildStaffDraft(readProjectForm(form, project));
     replaceExpenseRows(staffTbody, draft, 'staff');
-    dirty = true;
+    setDirty(true);
     showMessage(`인솔자용 초안 ${draft.length}개 항목을 만들었습니다. 확인하고 고친 뒤 저장하세요.`);
     return;
   }
 
   if (action === 'delete-expense' && tbody && expenseId) {
     removeExpenseRow(tbody, expenseId);
-    dirty = true;
+    setDirty(true);
     return;
   }
 
   if ((action === 'move-expense-up' || action === 'move-expense-down') && tbody && expenseId) {
     moveExpenseRow(tbody, expenseId, action === 'move-expense-up' ? 'up' : 'down');
-    dirty = true;
+    setDirty(true);
     return;
   }
 

@@ -22,11 +22,21 @@ const SECTION_RENDERERS = Object.freeze({
   [PROJECT_SECTION.SETTLEMENT]: renderSettlementSection
 });
 
+/** 페이지 맨 위의 전체 저장 버튼. 이 페이지의 모든 입력을 한 번에 저장한다. */
+export function saveAllBar(type = 'button') {
+  return `
+    <div class="save-all-bar no-print">
+      <span class="unsaved-note" role="status">저장하지 않은 변경사항이 있습니다.</span>
+      <button type="${type}" class="save-button save-all" ${type === 'button' ? 'data-action="save-all"' : ''}>전체 저장</button>
+    </div>`;
+}
+
 export function renderProjectPage(project, school, requestedSection = PROJECT_SECTION.BUSINESS) {
   const section = normalizeProjectSection(requestedSection);
   return `
     <h1>${escapeHtml(project.title)}</h1>
     <form id="projectForm" data-project-id="${escapeHtml(project.id)}" data-project-view="${section}">
+      ${saveAllBar()}
       ${SECTION_RENDERERS[section](project, school)}
     </form>`;
 }
@@ -45,7 +55,7 @@ function applyHeadcount(next, previous, data) {
   const summary = summarizeAttendance(next.workflow?.attendance ?? {}, next.totalStudents);
   next.actualParticipants = summary.participants;
   next.absentStudents = Math.max(0, summary.enrolled - summary.participants);
-  // 당일 불참자는 계약 후 불참이므로 '학생 총액' 항목과 공통비용의 수량(참여 + 당일 불참)에 들어간다.
+  // 신청 후 불참자는 계약 후 불참이므로 '학생 총액' 항목과 공통비의 수량(참여 + 신청 후 불참)에 들어간다.
   next.contractedAbsentStudents = summary.vulnerableAbsent + summary.regularAbsent;
   next.vulnerableContractedAbsent = summary.vulnerableAbsent;
   next.regularContractedAbsent = summary.regularAbsent;

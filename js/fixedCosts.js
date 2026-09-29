@@ -10,7 +10,7 @@ import { number, uid } from './utils.js';
  *     includeChaperones : 학생 + 인솔자 수로 나눈다(아니면 학생 수만).
  *     roundTo10         : 1인당 금액의 1원 단위를 버린다(10원 단위로 맞춤).
  *   나누고 남은 금액(인솔자 몫, 버림 잔액)은 학생 부담에서 빠지고 인솔자 비용으로 넘어간다.
- * - commonCost : 인원 화면의 '당일 불참자 공통비용 부담'을 체크하면 당일 불참자도 학생 수에 들어간다.
+ * - commonCost : 공통비. 인원 화면의 '신청 후 불참자 공통비 부담'을 체크하면 신청 후 불참자도 학생 수에 들어간다.
  *
  * 예) 버스비 9,000,000원 ÷ (학생 71명 + 인솔자 8명) = 113,924원 → 113,920원
  *     학생 71명 × 113,920원 = 8,088,320원, 인솔자 8명 × 113,920원 = 911,360원, 버림 잔액 320원
@@ -50,7 +50,8 @@ function normalizeEntry(source, builtin = null) {
     // 이전 버전은 버스비만 인솔자와 나눴고, 항상 10원 단위로 버렸다.
     includeChaperones: typeof source.includeChaperones === 'boolean' ? source.includeChaperones : Boolean(builtin?.includeChaperones),
     roundTo10: typeof source.roundTo10 === 'boolean' ? source.roundTo10 : true,
-    commonCost: builtin ? builtin.commonCost : false,
+    // 공통비: 신청 후 불참자도 부담하는 항목(버스비·숙소비는 처음부터 체크). 사용자가 바꿀 수 있다.
+    commonCost: typeof source.commonCost === 'boolean' ? source.commonCost : Boolean(builtin?.commonCost),
     memo: String(source.memo ?? '')
   };
 }
@@ -109,7 +110,7 @@ export function fixedCostBreakdown(entry, counts, { dayAbsentSharesCommonCost = 
 
 /** 1인당 금액이 어떻게 나왔는지 사람이 읽을 수 있게 설명한다(산출내역 비고란). */
 export function fixedCostBasisText(breakdown) {
-  const absent = breakdown.includesDayAbsent && breakdown.dayAbsent > 0 ? `(당일 불참 ${breakdown.dayAbsent}명 포함)` : '';
+  const absent = breakdown.includesDayAbsent && breakdown.dayAbsent > 0 ? `(신청 후 불참 ${breakdown.dayAbsent}명 포함)` : '';
   if (breakdown.mode === 'perPerson') return `1인당 금액 ${won(breakdown.perPerson)} 입력, 학생 ${breakdown.students}명${absent}`;
   const people = breakdown.chaperones > 0
     ? `(학생 ${breakdown.students}명${absent} + 인솔자 ${breakdown.chaperones}명)`

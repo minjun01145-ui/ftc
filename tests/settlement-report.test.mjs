@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createOtherSupport } from '../js/budget.js';
 import { createExpense, createProject } from '../js/presets.js';
 import { addAllocations, normalizeProposalPlan } from '../js/proposalPlan.js';
-import { EDUCATION_BUDGET_ID, STUDENT_BUDGET_ID, VULNERABLE_BUDGET_ID } from '../js/proposalPlanner.js';
+import { EDUCATION_BUDGET_ID, STUDENT_BUDGET_ID, VULNERABLE_BUDGET_ID, absentLineId } from '../js/proposalPlanner.js';
 import { buildSettlementReport, dayCount, periodText } from '../js/settlementReport.js';
 
 // 주례여자중학교_2026학년도 상반기 (중2)현장체험학습비 지원금 정산 서식.xlsx 7행과 같은 조건
@@ -37,6 +37,7 @@ function settledProject() {
   plan = addAllocations(plan, 'culture', ['musical']);
   plan = addAllocations(plan, 'school', ['ticket', 'b2', 'l2']);
   plan = addAllocations(plan, STUDENT_BUDGET_ID, ['l2', 'd2', 'b3', 'l3']);
+  plan = addAllocations(plan, EDUCATION_BUDGET_ID, [absentLineId('regular', 'fixed-bus'), absentLineId('regular', 'fixed-lodging')]);
   project.proposalPlan = plan;
   return project;
 }
@@ -70,7 +71,7 @@ test('정산 서식 7행 값은 실제 제출한 정산 서식과 같다', () =>
     '- 자체 수학여행 지원비(1인당 32,500원 * 52명 = 1,690,000원)',
     '- 936,000원 + 1,690,000원 = 2,626,000원',
     '',
-    '당일 불참자 공통경비(버스비, 숙소비): 184,900원'
+    '신청 후 불참자 공통경비(버스비, 숙소비): 184,900원'
   ].join('\n'));
 });
 

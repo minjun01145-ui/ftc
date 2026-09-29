@@ -5,8 +5,8 @@ import { number } from './utils.js';
  * 계산방법이 엔진의 calcMethod/quantityBase를 정한다. 둘 사이 변환은 이 모듈에서만 한다.
  *
  * 학생용
- * - perParticipant : 1인당 금액. 실제 참여 학생 수 × 단가 (당일 불참자 제외)
- * - studentTotal   : 학생 총액. (실제 참여 + 당일 불참) × 단가 — 당일 불참자도 부담한다.
+ * - perParticipant : 1인당 금액. 실제 참여 학생 수 × 단가 (신청 후 불참자 제외)
+ * - studentTotal   : 학생 총액. (실제 참여 + 신청 후 불참) × 단가 — 신청 후 불참자도 부담한다.
  * 인솔자용
  * - perStaff       : 1인당 금액. 인솔자 수 × 단가
  * - staffTotal     : 총액. 입력한 금액 그대로
@@ -30,7 +30,7 @@ const total = () => ({
 export const COST_METHODS = Object.freeze({
   student: Object.freeze([
     { value: 'perParticipant', label: '1인당 금액', ...perPerson('participants') },
-    { value: 'studentTotal', label: '학생 총액(당일 불참 포함)', ...perPerson('participantsPlusAbsent') }
+    { value: 'studentTotal', label: '학생 총액(신청 후 불참 포함)', ...perPerson('participantsPlusAbsent') }
   ]),
   staff: Object.freeze([
     { value: 'perStaff', label: '1인당 금액', ...perPerson(null) },

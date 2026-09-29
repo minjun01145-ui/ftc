@@ -109,27 +109,22 @@ export function createTripScheduleController({
     markDirty();
   }
 
-  function save(form) {
-    const project = getProject();
+  /**
+   * 일정 표를 수정 중이면(문서에서 불러온 초안 포함) 일정을 사업 데이터에 넣고 체험처/비용에 반영한다.
+   * 수정 중이 아니면 null을 돌려준다. 저장은 app.js가 페이지 전체와 함께 한다.
+   */
+  function applyTo(form, project) {
     const section = form.querySelector('[data-trip-schedule-section]');
-    if (!project || !section) return;
-
+    if (!section || section.dataset.editing !== 'true') return null;
     const tripSchedule = readTripScheduleSection(section, project.tripSchedule);
-    saveProject({
-      ...project,
-      startDate: form.elements.startDate?.value ?? project.startDate,
-      endDate: form.elements.endDate?.value ?? project.endDate,
-      tripSchedule,
-      expenses: syncExpensesFromTripSchedule(tripSchedule, project.expenses)
-    });
-    showMessage('체험학습 일정을 저장하고 체험처/비용에 반영했습니다.');
+    return { ...project, tripSchedule, expenses: syncExpensesFromTripSchedule(tripSchedule, project.expenses) };
   }
 
   return Object.freeze({
     importDocument,
     addRow,
     searchPlace,
-    save,
+    applyTo,
     startEditing: button => setTripScheduleEditing(button.closest('[data-trip-schedule-section]'), true)
   });
 }

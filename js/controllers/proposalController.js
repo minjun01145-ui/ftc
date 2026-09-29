@@ -1,5 +1,5 @@
 import { addAllocations, normalizeProposalPlan, removeAllocation } from '../proposalPlan.js';
-import { budgetChecklist, buildProposal, findAllocationResult, withBudgetAmount } from '../proposalPlanner.js';
+import { absentChecklist, budgetChecklist, buildProposal, findAllocationResult, withBudgetAmount } from '../proposalPlanner.js';
 
 const won = value => `${Math.round(Number(value) || 0).toLocaleString('ko-KR')}원`;
 
@@ -18,6 +18,7 @@ export function createProposalController({ getProject, saveProject, showMessage 
     const budget = proposal.budgets.find(item => item.id === budgetId);
     const result = findAllocationResult(proposal, budgetId, lineId);
     if (!budget || !result) return '';
+    if (result.absent) return `신청 후 불참 ${result.count}명의 ${result.name} ${won(result.total)}을 ${budget.name}에 넣었습니다.`;
     if (result.perPerson <= 0) return `${budget.name}의 한도가 가득 차서 ${result.name}을(를) 넣지 못했습니다.`;
     if (result.overBudget) {
       return `예산을 초과합니다. ${result.name} ${won(result.requested)} 중 ${won(result.perPerson)}만 ${budget.name}에 넣었습니다. 남은 ${won(result.left)}은 다른 예산에 넣을 수 있습니다.`;
@@ -41,10 +42,15 @@ export function createProposalController({ getProject, saveProject, showMessage 
   function fillBudget(budgetId) {
     const project = getProject();
     if (!project) return;
-    const lineIds = budgetChecklist(buildProposal(project), budgetId)
+    const current = buildProposal(project);
+    const lineIds = budgetChecklist(current, budgetId)
       .filter(item => !item.checked && !item.locked)
       .map(item => item.line.id);
-    if (!lineIds.length) return;
+    // 신청 후 불참 공통비는 1인당 한도와 상관없이 함께 넣는다.
+    const absentIds = absentChecklist(current, budgetId)
+      .filter(item => !item.checked && !item.locked)
+      .map(item => item.line.id);
+    if (!lineIds.length && !absentIds.length) return;
 
     // 위에서부터 하나씩 넣다가 예산이 가득 차면 멈춘다.
     let plan = normalizeProposalPlan(project.proposalPlan);
@@ -55,11 +61,13 @@ export function createProposalController({ getProject, saveProject, showMessage 
       const block = buildProposal({ ...project, proposalPlan: plan }).blocks.find(item => item.budget.id === budgetId);
       if (block?.full) break;
     }
+    if (absentIds.length) plan = addAllocations(plan, budgetId, absentIds);
     const proposal = save(project, plan);
-    const last = findAllocationResult(proposal, budgetId, added.at(-1));
+    const last = added.length ? findAllocationResult(proposal, budgetId, added.at(-1)) : null;
+    const count = added.length + absentIds.length;
     showMessage(last?.overBudget
-      ? `항목 ${added.length}개를 넣고 예산이 가득 찼습니다. ${last.name}은(는) ${won(last.perPerson)}만 넣고 ${won(last.left)}은 다른 예산에 넣을 수 있게 남겼습니다.`
-      : `항목 ${added.length}개를 넣었습니다.`);
+      ? `항목 ${count}개를 넣고 예산이 가득 찼습니다. ${last.name}은(는) ${won(last.perPerson)}만 넣고 ${won(last.left)}은 다른 예산에 넣을 수 있게 남겼습니다.`
+      : `항목 ${count}개를 넣었습니다.`);
   }
 
   function clearBudget(budgetId) {

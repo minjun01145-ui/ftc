@@ -61,7 +61,8 @@ export function buildSettlementReport(project, school = {}) {
   ];
   if (proposal.dayAbsentTotal > 0) {
     if (remarks.length) remarks.push('');
-    remarks.push(`당일 불참자 공통경비(${proposal.dayAbsent.map(item => item.name).join(', ')}): ${won(proposal.dayAbsentTotal)}`);
+    const names = [...new Set(proposal.absent.map(item => item.name))];
+    remarks.push(`신청 후 불참자 공통경비(${names.join(', ')}): ${won(proposal.dayAbsentTotal)}`);
   }
 
   const values = {

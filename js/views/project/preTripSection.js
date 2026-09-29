@@ -23,7 +23,7 @@ function withGroupCells(lines) {
 function noteText(line, counts) {
   if (line.isFixedCost) return line.basis;
   const notes = [];
-  if (line.includesDayAbsent && counts.contractedAbsent > 0) notes.push(`당일 불참 ${counts.contractedAbsent}명 포함`);
+  if (line.includesDayAbsent && counts.contractedAbsent > 0) notes.push(`신청 후 불참 ${counts.contractedAbsent}명 포함`);
   if (line.note) notes.push(line.note);
   return notes.join(', ');
 }
@@ -52,7 +52,7 @@ export function renderPreTripSection(project) {
   return `
     <section class="pre-trip-sheet" data-project-section="preTrip">
       <h2>학생 1인별 금액 산출 내역</h2>
-      <p>참여 ${counts.participants}명 · 당일 불참 ${counts.contractedAbsent}명 · 인솔자 ${counts.chaperones}명</p>
+      <p>참여 ${counts.participants}명 · 신청 후 불참 ${counts.contractedAbsent}명 · 인솔자 ${counts.chaperones}명</p>
       <div class="table-wrap">
         <table class="compact-table sheet-table">
           <thead><tr><th>항목</th><th>내용</th><th>금액(원)</th><th>학생 수</th><th>해당 항목 총액</th><th>비고</th></tr></thead>

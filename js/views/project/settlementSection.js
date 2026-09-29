@@ -36,7 +36,7 @@ export function renderSettlementSection(project, school = {}) {
         `)}
         ${card('1인당 비용', `
           ${item('1인당 현장체험학습비', won(values.perPerson), { strong: true })}
-          ${values.dayAbsentCommonCost > 0 ? item('당일 불참자 공통경비', won(values.dayAbsentCommonCost)) : ''}
+          ${values.dayAbsentCommonCost > 0 ? item('신청 후 불참자 공통경비', won(values.dayAbsentCommonCost)) : ''}
         `)}
         ${card('교육청 지원금', `
           ${item('교부액', won(values.grantTotal))}

@@ -73,7 +73,7 @@ export function renderBudgetSection(project) {
   return `
     <fieldset class="section-fieldset" data-project-section="budget" data-budget-section>
       <legend>예산</legend>
-      <button type="button" class="section-save" data-action="save-budget">저장</button>
+      <button type="button" class="section-save save-button" data-action="save-budget">저장</button>
 
       <section class="budget-group">
         <h3>교육청 지원금</h3>

@@ -1,4 +1,5 @@
 import { escapeHtml, number } from '../utils.js';
+import { saveAllBar } from './projectView.js';
 
 const EDUCATION_OFFICES = [
   ['seobu', '서부교육지원청'],
@@ -16,6 +17,7 @@ export function renderSchoolPage(school) {
   return `
     <h1>기본정보</h1>
     <form id="schoolForm">
+      ${saveAllBar('submit')}
       <fieldset>
         <legend>학교 조회</legend>
         <div class="school-lookup-grid">
@@ -61,7 +63,7 @@ export function renderSchoolPage(school) {
         <input type="hidden" name="schoolRegionCode" value="${escapeHtml(school.schoolRegionCode)}">
         <input type="hidden" name="schoolKindCode" value="${escapeHtml(school.schoolKindCode)}">
       </fieldset>
-      <div class="page-actions"><button type="submit">저장</button></div>
+      <div class="page-actions"><button type="submit" class="save-button">저장</button></div>
     </form>
   `;
 }

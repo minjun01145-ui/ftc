@@ -2,6 +2,7 @@ import {
   EDUCATION_BUDGET_ID,
   STUDENT_BUDGET_ID,
   VULNERABLE_BUDGET_ID,
+  absentChecklist,
   budgetChecklist,
   buildProposal
 } from '../../proposalPlanner.js';
@@ -19,6 +20,19 @@ function lineLabel(item) {
   return date ? `${date} ${item.name}` : item.name;
 }
 
+function absentGroupText(line) {
+  return `${line.group === 'vulnerable' ? '취약계층 ' : ''}신청 후 불참 ${line.count}명`;
+}
+
+// 예) 버스비(신청 후 불참 1명, 113,920원)
+function absentLabel(line) {
+  return `${lineLabel(line)}(${absentGroupText(line)}, ${won(line.perPerson)}원)`;
+}
+
+function absentCount(proposal, group) {
+  return group === 'vulnerable' ? proposal.counts.vulnerableAbsent : proposal.counts.regularAbsent;
+}
+
 /* ---------- 사용 방법과 진행 상황 ---------- */
 
 function guideBox() {
@@ -34,21 +48,28 @@ function guideBox() {
 }
 
 function progressBox(proposal) {
-  const { regular, vulnerable } = proposal.unassigned;
+  const { regular, vulnerable, absent } = proposal.unassigned;
   if (!proposal.lines.length) {
     return '<p class="proposal-progress warn">체험처/비용에서 단가를 입력한 항목이 없습니다.</p>';
   }
-  if (!regular.length) {
+  if (!regular.length && !absent.length) {
     return '<p class="proposal-progress done">비취약계층 비용을 모두 배정했습니다.</p>';
   }
   const chips = regular.map(item => `<span class="chip">${escapeHtml(lineLabel(item))} ${won(item.perPerson)}원</span>`).join('');
+  const regularNote = regular.length
+    ? `<p>아직 배정하지 않은 비취약계층 1인당 금액: <strong>${won(proposal.regularUnassignedPerPerson)}원</strong></p><div class="chips">${chips}</div>`
+    : '';
+  const absentChips = absent.map(item => `<span class="chip">${escapeHtml(absentLabel(item))}</span>`).join('');
+  const absentNote = absent.length
+    ? `<p>아직 배정하지 않은 신청 후 불참 공통비: <strong>${won(absent.reduce((sum, item) => sum + item.total, 0))}원</strong></p><div class="chips">${absentChips}</div>`
+    : '';
   const vulnerableNote = vulnerable.length && proposal.counts.vulnerable > 0
     ? `<p>취약계층 미배정 1인당 ${won(proposal.vulnerableBurden.perPerson)}원 → 수익자 부담</p>`
     : '';
   return `
     <div class="proposal-progress warn">
-      <p>아직 배정하지 않은 비취약계층 1인당 금액: <strong>${won(proposal.regularUnassignedPerPerson)}원</strong></p>
-      <div class="chips">${chips}</div>
+      ${regularNote}
+      ${absentNote}
       ${vulnerableNote}
     </div>`;
 }
@@ -112,36 +133,73 @@ function checklistItem(budgetId, { line, checked, result, available, locked, loc
     </li>`;
 }
 
+function absentChecklistItem(budgetId, { line, checked, locked }) {
+  const id = `proposal-${budgetId}-${line.id}`.replace(/[^\w-]/g, '_');
+  const amount = locked ? '다른 예산에 배정 완료' : `${won(line.total)}원`;
+  return `
+    <li class="${checked ? 'checked' : ''} ${locked ? 'disabled' : ''}">
+      <label for="${id}">
+        <input type="checkbox" id="${id}" data-proposal-toggle data-budget-id="${escapeHtml(budgetId)}" data-line-id="${escapeHtml(line.id)}"
+          ${checked ? 'checked' : ''} ${locked ? 'disabled' : ''}>
+        <span class="item-name">${escapeHtml(absentLabel(line))}</span>
+        <span class="item-amount">${amount}</span>
+      </label>
+    </li>`;
+}
+
+// 예) 53명(신청 후 불참 1명, 공통비 부담)
+function countText(proposal, budget) {
+  const absent = absentCount(proposal, budget.group);
+  return absent > 0 ? `${budget.count}명(신청 후 불참 ${absent}명, 공통비 부담)` : `${budget.count}명`;
+}
+
+/** 카드 아래 계산식: 참여 인원 × 1인당 금액, 신청 후 불참 인원 × 공통비 */
+function formulaLines(block) {
+  const lines = [`${block.budget.count}명 × ${won(block.usedPerPerson)}원 = ${won(block.participantTotal)}원`];
+  for (const group of ['vulnerable', 'regular']) {
+    const parts = block.absentParts.filter(part => part.group === group);
+    if (!parts.length) continue;
+    const perPerson = parts.reduce((sum, part) => sum + part.perPerson, 0);
+    const total = parts.reduce((sum, part) => sum + part.total, 0);
+    lines.push(`${absentGroupText(parts[0])} × ${won(perPerson)}원 = ${won(total)}원`);
+  }
+  if (block.absentParts.length) lines.push(`합계 <strong>${won(block.total)}원</strong>`);
+  else lines[0] = `${block.budget.count}명 × ${won(block.usedPerPerson)}원 = <strong>${won(block.total)}원</strong>`;
+  return lines.map(line => `<span>${line}</span>`).join('');
+}
+
 function budgetCard(proposal, block) {
   const { budget } = block;
-  if (budget.id === VULNERABLE_BUDGET_ID && budget.count <= 0) return '';
+  if (budget.id === VULNERABLE_BUDGET_ID && budget.count <= 0 && !proposal.counts.vulnerableAbsent) return '';
   const items = budgetChecklist(proposal, budget.id);
-  const canFill = items.some(item => !item.checked && !item.locked);
-  const canClear = items.some(item => item.checked);
+  const absentItems = absentChecklist(proposal, budget.id);
+  const canFill = [...items, ...absentItems].some(item => !item.checked && !item.locked);
+  const canClear = [...items, ...absentItems].some(item => item.checked);
   const fullNote = block.full && items.some(item => item.lockReason === 'full')
     ? '<p class="budget-full-note">예산이 가득 찼습니다.</p>'
     : '';
-  const dayAbsentNote = budget.id === EDUCATION_BUDGET_ID && proposal.dayAbsentTotal > 0
-    ? `<p class="budget-card-extra">+ 당일 불참 ${proposal.counts.dayAbsent}명 ${proposal.dayAbsent.map(item => item.name).join('·')} ${won(proposal.dayAbsentTotal)}원</p>`
+  const absentList = absentItems.length
+    ? `<h4 class="budget-checklist-head">신청 후 불참 공통비</h4>
+      <ul class="budget-checklist absent-checklist">${absentItems.map(item => absentChecklistItem(budget.id, item)).join('')}</ul>`
     : '';
   return `
     <section class="budget-card ${budget.group} ${block.full ? 'is-full' : ''}">
       <header>
         <h3>${escapeHtml(budget.name)}</h3>
         ${budget.memo ? `<p class="budget-memo-text">${escapeHtml(budget.memo)}</p>` : ''}
-        <p>${budget.count}명</p>
+        <p>${countText(proposal, budget)}</p>
         ${settingEditor(budget)}
       </header>
       ${meter(block)}
       ${fullNote}
       <ul class="budget-checklist">${items.map(item => checklistItem(budget.id, item)).join('')}</ul>
-      ${dayAbsentNote}
+      ${absentList}
       <footer>
         <div class="card-actions">
           <button type="button" class="small-button" data-action="proposal-fill-budget" data-budget-id="${escapeHtml(budget.id)}" ${canFill ? '' : 'disabled'}>남은 항목 모두 넣기</button>
           <button type="button" class="small-button" data-action="proposal-clear-budget" data-budget-id="${escapeHtml(budget.id)}" ${canClear ? '' : 'disabled'}>모두 해제</button>
         </div>
-        <span>${budget.count}명 × ${won(block.usedPerPerson)}원 = <strong>${won(block.total)}원</strong></span>
+        <div class="budget-formula">${formulaLines(block)}</div>
       </footer>
     </section>`;
 }
@@ -158,6 +216,10 @@ function partRows(block) {
     .map(part => row(`${escapeHtml(lineLabel(part))}${part.remainder ? ' <small>(나머지)</small>' : ''}`, block.budget.count, part.perPerson, part.total, { item: true }));
 }
 
+function absentRows(block) {
+  return block.absentParts.map(part => row(`${escapeHtml(lineLabel(part))}(${escapeHtml(absentGroupText(part))})`, part.count, part.perPerson, part.total, { item: true }));
+}
+
 function tableGroups(proposal) {
   const block = id => proposal.blocks.find(item => item.budget.id === id);
   const vulnerable = block(VULNERABLE_BUDGET_ID);
@@ -165,33 +227,36 @@ function tableGroups(proposal) {
   const groups = [];
 
   const educationRows = [];
-  if (vulnerable.total > 0) {
+  if (vulnerable.participantTotal > 0) {
     const fullyCovered = !proposal.unassigned.vulnerable.length && !Number.isFinite(vulnerable.budget.capPerPerson);
     educationRows.push(row(fullyCovered ? '취약계층 학생에게 현장체험학습비 전액 지원' : `취약계층 학생에게 ${won(vulnerable.usedPerPerson)}원 지원`,
       vulnerable.budget.count, vulnerable.usedPerPerson, vulnerable.total));
     if (!fullyCovered) educationRows.push(...partRows(vulnerable));
   }
-  if (education.total > 0) {
-    educationRows.push(row(`비취약계층 학생에게 ${won(education.usedPerPerson)}원 지원`, education.budget.count, education.usedPerPerson, education.total));
+  educationRows.push(...absentRows(vulnerable));
+  if (education.participantTotal > 0) {
+    educationRows.push(row(`비취약계층 학생에게 ${won(education.usedPerPerson)}원 지원`, education.budget.count, education.usedPerPerson, education.participantTotal));
     educationRows.push(...partRows(education));
   }
-  for (const item of proposal.dayAbsent) {
-    educationRows.push(row(`당일 불참 ${escapeHtml(item.name)}`, item.count, item.perPerson, item.total, { item: true }));
-  }
+  educationRows.push(...absentRows(education));
   groups.push({ name: '교육청 지원금', rows: educationRows, total: proposal.education.total });
 
   for (const other of proposal.blocks.filter(item => ![VULNERABLE_BUDGET_ID, EDUCATION_BUDGET_ID, STUDENT_BUDGET_ID].includes(item.budget.id))) {
     groups.push({
       name: other.budget.name,
-      rows: other.total > 0 ? [row(`비취약계층 학생에게 ${won(other.usedPerPerson)}원 지원`, other.budget.count, other.usedPerPerson, other.total), ...partRows(other)] : [],
+      rows: [
+        ...(other.participantTotal > 0 ? [row(`비취약계층 학생에게 ${won(other.usedPerPerson)}원 지원`, other.budget.count, other.usedPerPerson, other.participantTotal), ...partRows(other)] : []),
+        ...absentRows(other)
+      ],
       total: other.total
     });
   }
 
   const student = block(STUDENT_BUDGET_ID);
-  const studentRows = student.total > 0
-    ? [row('비취약계층 학생의 실부담액', student.budget.count, student.usedPerPerson, student.total), ...partRows(student)]
+  const studentRows = student.participantTotal > 0
+    ? [row('비취약계층 학생의 실부담액', student.budget.count, student.usedPerPerson, student.participantTotal), ...partRows(student)]
     : [];
+  studentRows.push(...absentRows(student));
   if (proposal.vulnerableBurden.total > 0) {
     const { vulnerableBurden } = proposal;
     studentRows.push(row('취약계층 학생의 실부담액', vulnerableBurden.count, vulnerableBurden.perPerson, vulnerableBurden.total));
