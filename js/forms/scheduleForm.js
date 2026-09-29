@@ -71,7 +71,7 @@ const FONT = "font-family:'맑은 고딕','Malgun Gothic',sans-serif;font-size:1
 const LINE = 'border:1px solid #000;';
 const lines = list => list.map(escapeHtml).join('<br>');
 
-function td(content, { rowspan = 1, width = null, header = false, style = '' } = {}) {
+function td(content, { rowspan = 1, width = null, header = false, style = '', nowrap = false } = {}) {
   const tag = header ? 'th' : 'td';
   const attrs = [
     rowspan > 1 ? `rowspan="${rowspan}"` : '',
@@ -81,7 +81,7 @@ function td(content, { rowspan = 1, width = null, header = false, style = '' } =
     'valign="middle"'
   ].filter(Boolean).join(' ');
   const background = header ? 'background:#BFBFBF;font-weight:bold;' : '';
-  return `<${tag} ${attrs} style="${LINE}${FONT}${background}padding:3px 5px;text-align:center;vertical-align:middle;white-space:nowrap;${style}">${content}</${tag}>`;
+  return `<${tag} ${attrs} style="${LINE}${FONT}${background}padding:3px 5px;text-align:center;vertical-align:middle;${nowrap || header ? 'white-space:nowrap;' : 'white-space:normal;'}${style}">${content}</${tag}>`;
 }
 
 /** 인라인 스타일과 표 속성만 쓰는 표. 한글에 붙여넣어도 테두리·병합·음영이 남는다. */
@@ -94,10 +94,10 @@ export function scheduleFormHtml(model, { title = '세부 일정표' } = {}) {
   const body = model.rows.map((row, index) => {
     const cells = [];
     const day = dayAt.get(index);
-    if (day) cells.push(td(lines(day.label), { rowspan: day.span }));
+    if (day) cells.push(td(lines(day.label), { rowspan: day.span, nowrap: true }));
     const place = placeAt.get(index);
     if (place) cells.push(td(lines(place.text.split(/\s*\n\s*/)), { rowspan: place.span }));
-    cells.push(td(escapeHtml(row.time)));
+    cells.push(td(escapeHtml(row.time), { nowrap: true }));
     cells.push(td(lines(row.detail)));
     cells.push(td(lines(row.note)));
     return `<tr>${cells.join('')}</tr>`;

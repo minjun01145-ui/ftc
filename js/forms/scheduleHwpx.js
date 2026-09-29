@@ -5,6 +5,7 @@ import { SCHEDULE_FORM_COLUMNS, scheduleFormText } from './scheduleForm.js';
  * 세부 일정표를 한글 파일(HWPX)로 만든다.
  * 견본 파일(templates/schedule-hwpx)의 글꼴·테두리·쪽 설정을 그대로 쓰고, 표만 일정에 맞게 새로 만든다.
  * 줄 배치(linesegarray)는 넣지 않는다. 한글이 파일을 열 때 다시 계산한다.
+ * 표는 글자처럼 취급하지 않는다(treatAsChar=0). 그래야 표가 길면 다음 쪽으로 나뉘고 머리글 줄이 반복된다.
  */
 const TEMPLATE_URL = new URL('../../templates/schedule-hwpx/', import.meta.url).href;
 const JSZIP_URL = new URL('../../vendor/jszip/jszip.min.js', import.meta.url).href;
@@ -109,7 +110,7 @@ export function scheduleTableXml(model, { id = 1207592517 } = {}) {
   const height = HEADER_HEIGHT + heights.reduce((sum, value) => sum + value, 0);
   return `<hp:tbl id="${id}" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="1" rowCnt="${rows.length + 1}" colCnt="5" cellSpacing="0" borderFillIDRef="5" noAdjust="0">`
     + `<hp:sz width="${TABLE_WIDTH}" widthRelTo="ABSOLUTE" height="${height}" heightRelTo="ABSOLUTE" protect="0"/>`
-    + '<hp:pos treatAsChar="1" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="COLUMN" vertAlign="TOP" horzAlign="LEFT" vertOffset="0" horzOffset="0"/>'
+    + '<hp:pos treatAsChar="0" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="COLUMN" vertAlign="TOP" horzAlign="LEFT" vertOffset="0" horzOffset="0"/>'
     + '<hp:outMargin left="0" right="0" top="0" bottom="0"/><hp:inMargin left="141" right="141" top="141" bottom="141"/>'
     + header + body
     + '</hp:tbl>';
