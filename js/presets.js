@@ -129,7 +129,7 @@ export function createProject(title = '새 사업') {
       importedFrom: null
     },
     fixedCosts: createFixedCosts(),
-    dayAbsentSharesCommonCost: false,
+    dayAbsentSharesCommonCost: true,
     totalStudents: 0,
     actualParticipants: 0,
     absentStudents: 0,
@@ -433,7 +433,8 @@ function normalizeProject(project) {
     endDate: String(source.endDate ?? ''),
     tripSchedule: normalizeTripSchedule(source.tripSchedule),
     fixedCosts: normalizeFixedCosts(source.fixedCosts),
-    dayAbsentSharesCommonCost: Boolean(source.dayAbsentSharesCommonCost),
+    // 기본은 신청 후 불참자도 공통비를 부담한다(저장된 값이 없을 때).
+    dayAbsentSharesCommonCost: source.dayAbsentSharesCommonCost === undefined ? true : Boolean(source.dayAbsentSharesCommonCost),
     totalStudents: Math.max(0, number(source.totalStudents)),
     actualParticipants: Math.max(0, number(source.actualParticipants)),
     absentStudents: Math.max(0, number(source.absentStudents)),

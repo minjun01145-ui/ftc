@@ -14,7 +14,10 @@ import { number } from './utils.js';
  *
  * 취약계층과 비취약계층은 학생 수가 다르므로 비용을 따로 센다(같은 항목이라도 각자 1인당 금액을 가진다).
  * 신청 후 불참 학생이 공통비(버스비·숙소비 등)를 부담하면, 그 금액은 '신청 후 불참' 항목으로 따로 두고
- * 예산 카드에서 체크해 넣는다. 이 항목은 1인당 한도와 상관없이 불참 인원 × 1인당 금액을 통째로 넣는다.
+ * 예산 카드에서 체크해 넣는다(불참 인원 × 1인당 금액).
+ * 교육청은 신청 후 불참 학생에게도 지원금을 주므로, 교육청 예산은 (참여 + 신청 후 불참) × 1인당 지원액이다.
+ * 불참 학생 몫(불참 인원 × 1인당 지원액)은 그 학생들의 공통비에만 쓴다. 넘는 금액은 남겨 다른 예산(수익자 부담)에 넣는다.
+ * 기타 지원금은 참여 학생에게만 주므로 불참 학생 항목을 넣을 수 없다.
  * 취약계층에게 배정하지 않고 남은 금액은 수익자 부담으로 자동 처리한다.
  */
 export const VULNERABLE_BUDGET_ID = 'education-vulnerable';
@@ -46,9 +49,9 @@ function absentLines(lines, counts) {
     : []));
 }
 
-/** 취약계층 불참자 몫은 어느 예산에나, 비취약 불참자 몫은 취약계층 예산을 뺀 곳에 넣을 수 있다. */
+/** 신청 후 불참 항목은 같은 계층의 교육청 지원금이나 수익자 부담에만 넣을 수 있다. */
 export function canTakeAbsentLine(budget, absentLine) {
-  return absentLine.group === 'vulnerable' || budget.group !== 'vulnerable';
+  return budget.id === STUDENT_BUDGET_ID || budget.absentGroup === absentLine.group;
 }
 
 /**
@@ -65,6 +68,8 @@ export function proposalBudgets(project, counts) {
       name: '교육청 지원금(취약계층)',
       group: 'vulnerable',
       count: counts.vulnerable,
+      absentGroup: 'vulnerable',
+      absentCount: counts.vulnerableAbsent,
       memo: String(memos.vulnerable ?? ''),
       setting: { mode: vulnerableFull ? 'full' : 'perPerson', amount: Math.max(0, number(education.vulnerablePerPerson)) },
       capPerPerson: vulnerableFull ? Number.POSITIVE_INFINITY : Math.max(0, number(education.vulnerablePerPerson))
@@ -74,6 +79,8 @@ export function proposalBudgets(project, counts) {
       name: '교육청 지원금(비취약계층)',
       group: 'regular',
       count: counts.regular,
+      absentGroup: 'regular',
+      absentCount: counts.regularAbsent,
       memo: String(memos.regular ?? ''),
       setting: { mode: 'perPerson', amount: Math.max(0, number(education.regularPerPerson)) },
       capPerPerson: Math.max(0, number(education.regularPerPerson))
@@ -112,23 +119,39 @@ function replay(budgets, lines, absent, allocations) {
   const budgetById = new Map(budgets.map(budget => [budget.id, budget]));
   const lineById = new Map(lines.map(line => [line.id, line]));
   const absentById = new Map(absent.map(line => [line.id, line]));
-  const absentTaken = new Set();
+  const absentRemaining = new Map(absent.map(line => [line.id, line.perPerson]));
+  const absentUsed = new Map(budgets.map(budget => [budget.id, 0]));
   const remaining = {
     vulnerable: new Map(lines.map(line => [line.id, line.perPerson])),
     regular: new Map(lines.map(line => [line.id, line.perPerson]))
   };
   const used = new Map(budgets.map(budget => [budget.id, 0]));
 
-  // 신청 후 불참 항목은 나누지 않고 처음 체크한 예산 하나에 통째로 넣는다.
+  // 신청 후 불참 항목: 불참 학생 1인당 지원액(capPerPerson) 안에서 체크한 순서대로 채운다.
   const absentResults = allocations
     .filter(item => budgetById.has(item.budgetId) && absentById.has(item.lineId))
     .filter(item => canTakeAbsentLine(budgetById.get(item.budgetId), absentById.get(item.lineId)))
-    .filter(item => {
-      if (absentTaken.has(item.lineId)) return false;
-      absentTaken.add(item.lineId);
-      return true;
-    })
-    .map(item => ({ ...absentById.get(item.lineId), budgetId: item.budgetId, lineId: item.lineId, absent: true }));
+    .map(item => {
+      const budget = budgetById.get(item.budgetId);
+      const line = absentById.get(item.lineId);
+      const requested = absentRemaining.get(line.id);
+      const room = budget.capPerPerson - absentUsed.get(budget.id);
+      const perPerson = Math.max(0, Math.min(requested, room));
+      absentRemaining.set(line.id, requested - perPerson);
+      absentUsed.set(budget.id, absentUsed.get(budget.id) + perPerson);
+      return {
+        ...line,
+        budgetId: budget.id,
+        lineId: line.id,
+        absent: true,
+        requested,
+        perPerson,
+        total: perPerson * line.count,
+        left: requested - perPerson,
+        overBudget: perPerson < requested,
+        remainder: requested < line.perPerson
+      };
+    });
 
   const results = allocations
     .filter(item => budgetById.has(item.budgetId) && lineById.has(item.lineId))
@@ -154,7 +177,7 @@ function replay(budgets, lines, absent, allocations) {
         remainder: requested < line.perPerson
       };
     });
-  return { results, absentResults, absentTaken, remaining, used };
+  return { results, absentResults, absentRemaining, absentUsed, remaining, used };
 }
 
 function unassignedLines(lines, pool) {
@@ -189,15 +212,19 @@ export function buildProposal(project) {
   const lines = studentCostLines(project);
   const absent = absentLines(lines, counts);
   const budgets = proposalBudgets(project, counts);
-  const { results, absentResults, absentTaken, remaining, used } = replay(budgets, lines, absent, plan.allocations);
+  const { results, absentResults, absentRemaining, absentUsed, remaining, used } = replay(budgets, lines, absent, plan.allocations);
 
   const blocks = budgets.map(budget => {
     const usedPerPerson = used.get(budget.id);
     const parts = results
       .filter(result => result.budgetId === budget.id)
       .map(result => ({ ...result, total: result.perPerson * budget.count }));
-    const absentParts = absentResults.filter(result => result.budgetId === budget.id);
-    const unusedPerPerson = Number.isFinite(budget.capPerPerson) ? budget.capPerPerson - usedPerPerson : null;
+    const absentParts = absentResults.filter(result => result.budgetId === budget.id && result.perPerson > 0);
+    const finite = Number.isFinite(budget.capPerPerson);
+    const unusedPerPerson = finite ? budget.capPerPerson - usedPerPerson : null;
+    const absentCount = budget.absentCount ?? 0;
+    const absentUsedPerPerson = absentUsed.get(budget.id);
+    const absentUnusedPerPerson = finite && absentCount > 0 ? budget.capPerPerson - absentUsedPerPerson : null;
     const participantTotal = usedPerPerson * budget.count;
     const absentTotal = sumLines(absentParts, 'total');
     return {
@@ -207,13 +234,24 @@ export function buildProposal(project) {
       usedPerPerson,
       unusedPerPerson,
       full: unusedPerPerson !== null && unusedPerPerson <= 0,
+      absentCount,
+      absentUsedPerPerson,
+      absentUnusedPerPerson,
+      absentFull: absentUnusedPerPerson !== null && absentUnusedPerPerson <= 0,
+      // 예산 총액: (참여 + 신청 후 불참) × 1인당 지원액. 한도가 없는 예산은 null
+      budgetTotal: finite ? budget.capPerPerson * (budget.count + absentCount) : null,
       participantTotal,
       absentTotal,
       total: participantTotal + absentTotal
     };
   });
 
-  const unassignedAbsent = absent.filter(line => !absentTaken.has(line.id));
+  const unassignedAbsent = absent
+    .filter(line => absentRemaining.get(line.id) > 0)
+    .map(line => {
+      const left = absentRemaining.get(line.id);
+      return { ...line, perPerson: left, total: left * line.count, full: left === line.perPerson };
+    });
   const unassigned = {
     vulnerable: unassignedLines(lines, remaining.vulnerable),
     regular: unassignedLines(lines, remaining.regular),
@@ -279,15 +317,24 @@ export function budgetChecklist(proposal, budgetId) {
   });
 }
 
-/** 한 예산에서 신청 후 불참 공통비 항목의 상태. 다른 예산에 넣은 항목은 잠근다. */
+/** 한 예산에서 신청 후 불참 공통비 항목의 상태(체크 여부, 넣은 금액, 넣을 수 있는 금액). */
 export function absentChecklist(proposal, budgetId) {
   const budget = proposal.budgets.find(item => item.id === budgetId);
+  const block = proposal.blocks.find(item => item.budget.id === budgetId);
+  const available = new Map(proposal.unassigned.absent.map(item => [item.id, item.perPerson]));
   return proposal.absent
     .filter(line => canTakeAbsentLine(budget, line))
     .map(line => {
-      const result = proposal.absentResults.find(item => item.lineId === line.id) ?? null;
-      const checked = result?.budgetId === budgetId;
-      return { line, checked, result: checked ? result : null, locked: Boolean(result) && !checked };
+      const result = proposal.absentResults.find(item => item.budgetId === budgetId && item.lineId === line.id) ?? null;
+      const amount = available.get(line.id) ?? 0;
+      return {
+        line,
+        checked: Boolean(result),
+        result,
+        available: amount,
+        locked: !result && (amount <= 0 || Boolean(block?.absentFull)),
+        lockReason: !result && amount <= 0 ? 'assigned' : (!result && block?.absentFull ? 'full' : null)
+      };
     });
 }
 

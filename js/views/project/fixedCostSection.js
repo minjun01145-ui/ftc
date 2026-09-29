@@ -80,13 +80,12 @@ export function fixedCostRowHtml(entry, breakdown = null) {
   const badge = shared ? `<small class="shared-badge">${escapeHtml(sharedWithText(entry.sharedTitles))}</small>` : '';
   return `
     <tr data-fixed-row data-fixed-id="${escapeHtml(entry.id)}" data-builtin="${entry.builtin ?? ''}" class="${shared ? 'shared-row' : ''}">
-      <th scope="row">${name}${badge}</th>
+      <th scope="row">${name}${badge}${entry.builtin ? '' : '<button type="button" class="small-button danger fixed-delete" data-action="delete-fixed-cost">삭제</button>'}</th>
       <td>${modeCell(entry)}</td>
       <td><input type="number" min="0" step="1" data-fixed-field="amount" value="${number(entry.amount)}" aria-label="금액"></td>
       <td class="number">${entered ? money(breakdown.perPerson) : '-'}${entered ? `<small>${escapeHtml(fixedCostBasisText(breakdown))}</small>` : ''}</td>
       <td class="number">${entered ? money(breakdown.studentTotal) : '-'}</td>
       <td><input type="text" data-fixed-field="memo" value="${escapeHtml(entry.memo)}" placeholder="예: 2박" aria-label="내용"></td>
-      <td class="center">${entry.builtin ? '' : '<button type="button" class="small-button danger" data-action="delete-fixed-cost">삭제</button>'}</td>
     </tr>`;
 }
 
@@ -98,7 +97,7 @@ function staffShareRows(project) {
         <th scope="row">${escapeHtml(share.label)}</th>
         <td colspan="3">인솔자 비용</td>
         <td class="number">${money(share.total)}</td>
-        <td colspan="2"></td>
+        <td></td>
       </tr>`).join('');
 }
 
@@ -120,7 +119,7 @@ export function renderFixedCostTable(project) {
       </div>
       <div class="table-wrap">
         <table class="compact-table fixed-cost-table">
-          <thead><tr><th>항목</th><th>입력 방식</th><th>금액(원)</th><th>학생 1인당</th><th>학생 합계</th><th>내용</th><th>삭제</th></tr></thead>
+          <thead><tr><th>항목</th><th>입력 방식</th><th>금액(원)</th><th>학생 1인당</th><th>학생 합계</th><th>내용</th></tr></thead>
           <tbody data-fixed-cost-list>${rows}${staffShareRows(project)}</tbody>
         </table>
       </div>
@@ -203,7 +202,7 @@ function sharedPanelHtml(candidates) {
     : '<p class="help">내 사업에 다른 사업이 없습니다. 다른 학년 사업을 먼저 만들거나 직접 입력하세요.</p>';
   return `
     <tr class="shared-panel-row" data-shared-panel>
-      <td colspan="7">
+      <td colspan="6">
         <div class="shared-panel">
           <div class="shared-option">
             <h4>내 사업에서 가져오기</h4>

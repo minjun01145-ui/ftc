@@ -90,6 +90,21 @@ function settingEditor(budget) {
     </label>`;
 }
 
+/** 예) 예산 1인당 100,000원 × 10명(참여 9 + 신청 후 불참 1) = 1,000,000원 */
+function budgetTotalLine(block) {
+  if (block.budgetTotal === null || block.absentCount <= 0) return '';
+  const people = block.budget.count + block.absentCount;
+  return `<p class="budget-card-usage">예산 1인당 ${won(block.budget.capPerPerson)}원 × ${people}명(참여 ${block.budget.count} + 신청 후 불참 ${block.absentCount}) = <strong>${won(block.budgetTotal)}원</strong></p>`;
+}
+
+function absentMeter(block) {
+  if (block.absentUnusedPerPerson === null) return '';
+  const status = block.absentFull
+    ? '<span class="ok-text">모두 사용</span>'
+    : `남은 ${won(block.absentUnusedPerPerson)}원`;
+  return `<p class="budget-card-usage">신청 후 불참 1인당 ${won(block.absentUsedPerPerson)}원 사용 · ${status}</p>`;
+}
+
 function meter(block) {
   if (!Number.isFinite(block.budget.capPerPerson)) {
     return `<p class="budget-card-usage">1인당 ${won(block.usedPerPerson)}원 배정</p>`;
@@ -133,9 +148,23 @@ function checklistItem(budgetId, { line, checked, result, available, locked, loc
     </li>`;
 }
 
-function absentChecklistItem(budgetId, { line, checked, locked }) {
+function absentChecklistItem(budgetId, { line, checked, result, available, locked, lockReason }) {
   const id = `proposal-${budgetId}-${line.id}`.replace(/[^\w-]/g, '_');
-  const amount = locked ? '다른 예산에 배정 완료' : `${won(line.total)}원`;
+  let amount;
+  let note = '';
+  if (checked && result.perPerson <= 0) {
+    amount = '0원';
+    note = '<span class="warn-text">불참 학생 지원금이 가득 차서 넣지 못함</span>';
+  } else if (checked) {
+    amount = `${won(result.total)}원`;
+    if (result.overBudget) {
+      note = `<span class="warn-text">지원금 초과: 1인 ${won(result.requested)}원 중 ${won(result.perPerson)}원만 넣음, ${won(result.left)}원 남음</span>`;
+    }
+  } else if (lockReason === 'assigned') {
+    amount = '다른 예산에 배정 완료';
+  } else {
+    amount = available < line.perPerson ? `남은 ${won(available * line.count)}원` : `${won(available * line.count)}원`;
+  }
   return `
     <li class="${checked ? 'checked' : ''} ${locked ? 'disabled' : ''}">
       <label for="${id}">
@@ -144,6 +173,7 @@ function absentChecklistItem(budgetId, { line, checked, locked }) {
         <span class="item-name">${escapeHtml(absentLabel(line))}</span>
         <span class="item-amount">${amount}</span>
       </label>
+      ${note ? `<div class="item-note">${note}</div>` : ''}
     </li>`;
 }
 
@@ -190,7 +220,9 @@ function budgetCard(proposal, block) {
         <p>${countText(proposal, budget)}</p>
         ${settingEditor(budget)}
       </header>
+      ${budgetTotalLine(block)}
       ${meter(block)}
+      ${absentMeter(block)}
       ${fullNote}
       <ul class="budget-checklist">${items.map(item => checklistItem(budget.id, item)).join('')}</ul>
       ${absentList}

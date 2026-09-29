@@ -182,14 +182,36 @@ test('신청 후 불참자 공통비는 따로 나오고, 체크한 예산에 �
   // 비취약 불참자 몫은 취약계층 예산에 넣을 수 없다.
   assert.deepEqual(absentChecklist(proposal, VULNERABLE_BUDGET_ID), []);
 
-  project.proposalPlan = addAllocations(normalizeProposalPlan({}), 'school', [absentLineId('regular', 'fixed-bus')]);
+  // 기타 지원금은 참여 학생 몫이라 불참 학생 항목을 넣을 수 없다.
+  assert.deepEqual(absentChecklist(proposal, 'school'), []);
+  assert.equal(absentChecklist(proposal, STUDENT_BUDGET_ID).length, 2);
+});
+
+test('교육청 예산은 신청 후 불참 학생 몫까지 잡고, 불참 학생 몫은 공통비에만 한도 안에서 쓴다', () => {
+  const project = excelProject();
+  project.educationSupport = { ...project.educationSupport, regularPerPerson: 100000 };
+  project.proposalPlan = addAllocations(normalizeProposalPlan({}), EDUCATION_BUDGET_ID,
+    ['ticket', 'meal-coupon', 'breakfast2', 'musical', 'lunch2', 'dinner2', absentLineId('regular', 'fixed-bus'), absentLineId('regular', 'fixed-lodging')]);
+  let proposal = buildProposal(project);
+  const education = () => proposal.blocks.find(block => block.budget.id === EDUCATION_BUDGET_ID);
+
+  assert.equal(education().budgetTotal, 100000 * 54, '참여 53명 + 신청 후 불참 1명');
+  assert.equal(education().full, true);
+  const bus = findAllocationResult(proposal, EDUCATION_BUDGET_ID, absentLineId('regular', 'fixed-bus'));
+  assert.equal(bus.perPerson, 100000, '버스비 113,920원 중 불참 학생 지원금 100,000원만');
+  assert.equal(bus.left, 13920);
+  const lodging = findAllocationResult(proposal, EDUCATION_BUDGET_ID, absentLineId('regular', 'fixed-lodging'));
+  assert.equal(lodging.perPerson, 0, '불참 학생 지원금을 다 써서 숙소비는 못 넣는다');
+  assert.equal(education().absentFull, true);
+  assert.equal(education().total, 100000 * 54);
+  assert.deepEqual(proposal.unassigned.absent.map(line => [line.name, line.perPerson]), [['버스비', 13920], ['숙소비', 70980]]);
+
+  // 넘친 금액은 수익자 부담에 넣을 수 있다.
+  project.proposalPlan = addAllocations(project.proposalPlan, STUDENT_BUDGET_ID, [absentLineId('regular', 'fixed-bus'), absentLineId('regular', 'fixed-lodging')]);
   proposal = buildProposal(project);
-  const school = proposal.blocks.find(block => block.budget.id === 'school');
-  assert.equal(school.usedPerPerson, 0, '불참자 공통비는 1인당 한도를 쓰지 않는다');
-  assert.equal(school.total, 113920);
-  const lodging = absentChecklist(proposal, STUDENT_BUDGET_ID);
-  assert.equal(lodging.find(item => item.line.name === '버스비').locked, true, '다른 예산에 넣은 항목은 잠긴다');
-  assert.equal(lodging.find(item => item.line.name === '숙소비').locked, false);
+  assert.deepEqual(proposal.unassigned.absent, []);
+  assert.equal(proposal.blocks.find(block => block.budget.id === STUDENT_BUDGET_ID).absentTotal, 13920 + 70980);
+  assert.equal(proposal.assignedTotal + proposal.unassignedTotal, proposal.costTotal);
 });
 
 test('공통비 부담을 체크하지 않으면 신청 후 불참 항목이 없다', () => {
