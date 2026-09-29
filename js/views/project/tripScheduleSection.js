@@ -88,6 +88,7 @@ export function renderTripScheduleSection(project) {
   return `
     <fieldset class="section-fieldset trip-schedule-section" data-project-section="business" data-trip-schedule-section>
       <legend>체험학습 일정 입력</legend>
+      <p class="help">학교운영위원회 심의자료 등 체험학습 일정이 포함된 파일을 추가하십시오.<br>'일정 항목 추가'로 수동으로 추가할 수도 있습니다.<br>파일은 hwpx와 pdf를 지원합니다.</p>
       <div class="toolbar">
         <input type="file" accept="${TRIP_SCHEDULE_FILE_ACCEPT}" data-trip-schedule-upload aria-label="PDF 또는 HWPX 일정 문서 업로드">
         <span class="help" data-trip-schedule-upload-status role="status" aria-live="polite"></span>
