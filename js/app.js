@@ -12,6 +12,7 @@ import { KAKAO_JAVASCRIPT_KEY } from './config/kakaoConfig.js';
 import { createDefaultAiClient } from './ai/createDefaultAiClient.js';
 import { createProposalController } from './controllers/proposalController.js';
 import { createTripScheduleController } from './controllers/tripScheduleController.js';
+import { propagateSharedLinks } from './sharedCosts.js';
 import { buildStaffDraft } from './staffDraft.js';
 import { getState, persistState, replaceState, updateState } from './state.js';
 import { downloadJson, escapeHtml, number } from './utils.js';
@@ -314,9 +315,9 @@ function saveProject(form, messageText = '저장했습니다.') {
       return;
     }
   }
+  // 기타비를 다른 학년과 함께 계산하면 상대 사업에도 연결과 계약액을 반영한다.
   updateState(next => {
-    const index = next.projects.findIndex(item => item.id === currentPage.projectId);
-    if (index >= 0) next.projects[index] = nextProject;
+    next.projects = propagateSharedLinks(next.projects, project, nextProject);
   });
   persistState();
   render();

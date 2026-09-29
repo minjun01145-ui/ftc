@@ -58,6 +58,7 @@ function normalizeEntry(source, builtin = null) {
     sharedPeople: Math.max(0, Math.floor(number(source.sharedPeople))),
     sharedNote: String(source.sharedNote ?? ''),
     sharedProjectIds: Array.isArray(source.sharedProjectIds) ? source.sharedProjectIds.map(String).filter(Boolean) : [],
+    sharedTitles: Array.isArray(source.sharedTitles) ? source.sharedTitles.map(String) : [],
     // 공통비: 신청 후 불참자도 부담하는 항목(버스비·숙소비는 처음부터 체크). 사용자가 바꿀 수 있다.
     commonCost: typeof source.commonCost === 'boolean' ? source.commonCost : Boolean(builtin?.commonCost),
     memo: String(source.memo ?? '')

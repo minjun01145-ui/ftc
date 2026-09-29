@@ -175,3 +175,31 @@ test('함께 계산하는 사업의 인원을 고치면 버스비 계산 인원�
   assert.deepEqual(bus.sharedProjectIds, [], '삭제한 사업은 연결에서 빠진다');
   assert.equal(bus.sharedPeople, 0);
 });
+
+test('한쪽에서 함께 계산하면 상대 사업의 같은 항목도 연결되고 계약액이 들어가며, 해제하면 양쪽이 풀린다', async () => {
+  const { propagateSharedLinks, syncSharedCounts } = await import('../js/sharedCosts.js');
+  const { sharedWithText } = await import('../js/views/project/fixedCostSection.js');
+  const first = createProject('1학년 수학여행');
+  Object.assign(first, { actualParticipants: 70, chaperones: 8 });
+  const third = createProject('3학년 수학여행');
+  Object.assign(third, { actualParticipants: 60, chaperones: 10 });
+  const linkedThird = { ...third, fixedCosts: [{ builtin: 'bus', mode: 'total', amount: 9_000_000, includeChaperones: true, sharedProjectIds: [first.id] }] };
+
+  let projects = propagateSharedLinks([first, third], third, linkedThird);
+  let state = syncSharedCounts({ school: {}, projects });
+  const firstBus = normalizeFixedCosts(state.projects[0].fixedCosts)[0];
+  const thirdBus = normalizeFixedCosts(state.projects[1].fixedCosts)[0];
+  assert.equal(firstBus.amount, 9_000_000);
+  assert.equal(firstBus.mode, 'total');
+  assert.deepEqual(firstBus.sharedProjectIds, [third.id]);
+  assert.equal(firstBus.sharedPeople, 70, '3학년 학생 60 + 인솔자 10');
+  assert.deepEqual(thirdBus.sharedTitles, ['1학년 수학여행']);
+  assert.equal(sharedWithText(thirdBus.sharedTitles), '1학년 수학여행과 같이 계산');
+  assert.equal(sharedWithText(['2학년 수련회']), '2학년 수련회와 같이 계산');
+
+  const unlinked = { ...state.projects[1], fixedCosts: [{ ...thirdBus, sharedProjectIds: [] }] };
+  projects = propagateSharedLinks(state.projects, state.projects[1], unlinked);
+  state = syncSharedCounts({ school: {}, projects });
+  assert.deepEqual(normalizeFixedCosts(state.projects[0].fixedCosts)[0].sharedProjectIds, []);
+  assert.equal(normalizeFixedCosts(state.projects[0].fixedCosts)[0].sharedPeople, 0);
+});

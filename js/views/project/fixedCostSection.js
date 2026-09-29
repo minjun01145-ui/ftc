@@ -17,6 +17,18 @@ function countsOf(project) {
   return { participants: c.participants, dayAbsent: c.contractedAbsent, chaperones: c.chaperones };
 }
 
+// 받침이 있으면 '과', 없으면 '와'. 한글로 끝나지 않으면 '와(과)'.
+function withParticle(word) {
+  const code = word.charCodeAt(word.length - 1) - 0xac00;
+  if (code < 0 || code > 11171) return `${word}와(과)`;
+  return `${word}${code % 28 ? '과' : '와'}`;
+}
+
+/** 예) 1학년 수학여행과 같이 계산 */
+export function sharedWithText(titles) {
+  return `${withParticle(titles.join(', '))} 같이 계산`;
+}
+
 function sharedSummary({ sharedPeople, sharedNote, headcount }) {
   if (sharedPeople > 0) return `다른 학년 +${sharedPeople}명${sharedNote ? ` (${sharedNote})` : ''}`;
   if (headcount) return `계산 인원 ${headcount}명(직접 입력)`;
@@ -64,9 +76,11 @@ export function fixedCostRowHtml(entry, breakdown = null) {
   const name = entry.builtin
     ? escapeHtml(entry.label)
     : `<input type="text" data-fixed-field="label" value="${escapeHtml(entry.label)}" placeholder="항목 이름" aria-label="기타비 항목 이름">`;
+  const shared = entry.mode === 'total' && entry.sharedTitles.length > 0;
+  const badge = shared ? `<small class="shared-badge">${escapeHtml(sharedWithText(entry.sharedTitles))}</small>` : '';
   return `
-    <tr data-fixed-row data-fixed-id="${escapeHtml(entry.id)}" data-builtin="${entry.builtin ?? ''}">
-      <th scope="row">${name}</th>
+    <tr data-fixed-row data-fixed-id="${escapeHtml(entry.id)}" data-builtin="${entry.builtin ?? ''}" class="${shared ? 'shared-row' : ''}">
+      <th scope="row">${name}${badge}</th>
       <td>${modeCell(entry)}</td>
       <td><input type="number" min="0" step="1" data-fixed-field="amount" value="${number(entry.amount)}" aria-label="금액"></td>
       <td class="number">${entered ? money(breakdown.perPerson) : '-'}${entered ? `<small>${escapeHtml(fixedCostBasisText(breakdown))}</small>` : ''}</td>
@@ -157,6 +171,8 @@ export function readFixedCostInputs(form, previousFixedCosts) {
       sharedPeople: mode === 'total' ? field('sharedPeople').value : before.sharedPeople,
       sharedNote: mode === 'total' ? field('sharedNote').value : before.sharedNote,
       sharedProjectIds: mode === 'total' ? field('sharedProjectIds').value.split(',').filter(Boolean) : before.sharedProjectIds,
+      // 이 화면에서 연결을 풀거나 직접 입력으로 바꾸면 연결 표시를 지운다(연결은 저장할 때 다시 채운다).
+      sharedTitles: mode === 'total' && !field('sharedProjectIds').value ? [] : before.sharedTitles,
       memo: field('memo').value.trim()
     };
   }));
