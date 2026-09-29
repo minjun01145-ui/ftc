@@ -894,9 +894,11 @@ exportBtn.addEventListener('click', () => {
     alert('저장하지 않은 변경사항이 있습니다. 먼저 저장해 주세요.');
     return;
   }
-  const state = getState();
-  const schoolName = state.school.name || '학교';
-  downloadJson(`${schoolName}_현장체험학습_자료.json`.replace(/[\\/:*?"<>|]/g, '_'), state);
+  // 기본 파일 이름: 내보낸 날짜와 시각(예: 2026-09-29-2145.json)
+  const now = new Date();
+  const pad = value => String(value).padStart(2, '0');
+  const stamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`;
+  downloadJson(`${stamp}.json`, getState());
   showMessage('저장 파일을 만들었습니다.');
 });
 
