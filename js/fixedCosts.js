@@ -12,6 +12,7 @@ import { number, uid } from './utils.js';
  *   나누고 남은 금액(인솔자 몫, 버림 잔액)은 학생 부담에서 빠지고 인솔자 비용으로 넘어간다.
  *     sharedPeople : 다른 학년과 함께 계산. 1·3학년이 버스를 같이 타는 경우처럼 다른 사업 인원을 더해서 나눈다.
  *                    더한 인원 몫은 이 사업 비용이 아니다. sharedNote에 어디서 가져왔는지 적어 둔다.
+ *     sharedProjectIds : 함께 계산하는 내 사업. 그 사업 인원이 바뀌면 sharedPeople이 따라 바뀐다(sharedCosts.js).
  *     headcount    : (이전 버전) 전체 계산 인원을 직접 넣은 값. sharedPeople이 없을 때만 쓴다.
  * - commonCost : 공통비. 인원 화면의 '신청 후 불참자 공통비 부담'을 체크하면 신청 후 불참자도 학생 수에 들어간다.
  *
@@ -56,6 +57,7 @@ function normalizeEntry(source, builtin = null) {
     headcount: Math.max(0, Math.floor(number(source.headcount))) || null,
     sharedPeople: Math.max(0, Math.floor(number(source.sharedPeople))),
     sharedNote: String(source.sharedNote ?? ''),
+    sharedProjectIds: Array.isArray(source.sharedProjectIds) ? source.sharedProjectIds.map(String).filter(Boolean) : [],
     // 공통비: 신청 후 불참자도 부담하는 항목(버스비·숙소비는 처음부터 체크). 사용자가 바꿀 수 있다.
     commonCost: typeof source.commonCost === 'boolean' ? source.commonCost : Boolean(builtin?.commonCost),
     memo: String(source.memo ?? '')

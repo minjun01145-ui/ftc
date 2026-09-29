@@ -150,3 +150,28 @@ test('다른 학년과 함께 계산하면 그 인원을 더해 나누고, 이 �
   assert.match(fixedCostBasisText(breakdown), /계산 인원 150명\(이 사업 학생 70명 \+ 인솔자 8명, 다른 학년 72명 포함\)/);
   assert.equal(fixedCostBreakdown(bus, { participants: 60, dayAbsent: 0, chaperones: 8 }).divisor, 140);
 });
+
+test('함께 계산하는 사업의 인원을 고치면 버스비 계산 인원이 따라 바뀐다', async () => {
+  const { syncSharedCounts } = await import('../js/sharedCosts.js');
+  const first = createProject('1학년');
+  Object.assign(first, { actualParticipants: 69, contractedAbsentStudents: 1, chaperones: 8, dayAbsentSharesCommonCost: true });
+  first.fixedCosts = { bus: { mode: 'total', amount: 9_000_000, includeChaperones: true } };
+  const third = createProject('3학년');
+  Object.assign(third, { actualParticipants: 60, chaperones: 10 });
+  third.fixedCosts = { bus: { mode: 'total', amount: 9_000_000, includeChaperones: true, sharedProjectIds: [first.id] } };
+
+  let state = syncSharedCounts({ school: {}, projects: [first, third] });
+  let bus = normalizeFixedCosts(state.projects[1].fixedCosts)[0];
+  assert.equal(bus.sharedPeople, 78, '학생 69 + 신청 후 불참 1 + 인솔자 8');
+  assert.equal(bus.sharedNote, '1학년 78명');
+
+  state.projects[0] = { ...state.projects[0], actualParticipants: 65, chaperones: 6 };
+  state = syncSharedCounts(state);
+  bus = normalizeFixedCosts(state.projects[1].fixedCosts)[0];
+  assert.equal(bus.sharedPeople, 72);
+
+  state = syncSharedCounts({ ...state, projects: [state.projects[1]] });
+  bus = normalizeFixedCosts(state.projects[0].fixedCosts)[0];
+  assert.deepEqual(bus.sharedProjectIds, [], '삭제한 사업은 연결에서 빠진다');
+  assert.equal(bus.sharedPeople, 0);
+});

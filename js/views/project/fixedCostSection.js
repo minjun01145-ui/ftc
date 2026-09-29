@@ -7,6 +7,7 @@ import {
   fixedCostStaffShares,
   normalizeFixedCosts
 } from '../../fixedCosts.js';
+import { sharedNoteText, sharedPeopleOf } from '../../sharedCosts.js';
 import { escapeHtml, formatWon, number } from '../../utils.js';
 
 const money = value => formatWon(Math.round(number(value)));
@@ -29,6 +30,7 @@ function sharedCountHtml(entry, disabled) {
     <div class="shared-count" data-shared-count>
       <input type="hidden" data-fixed-field="sharedPeople" value="${entry.sharedPeople || ''}">
       <input type="hidden" data-fixed-field="sharedNote" value="${escapeHtml(entry.sharedNote)}">
+      <input type="hidden" data-fixed-field="sharedProjectIds" value="${escapeHtml(entry.sharedProjectIds.join(','))}">
       <input type="hidden" data-fixed-field="headcount" value="${entry.headcount ?? ''}">
       <span class="shared-summary" data-shared-summary ${summary ? '' : 'hidden'}>${escapeHtml(summary)}</span>
       <button type="button" class="small-button" data-action="open-shared-count" data-total-only ${disabled}>${summary ? '변경' : '다른 학년과 함께 계산'}</button>
@@ -154,6 +156,7 @@ export function readFixedCostInputs(form, previousFixedCosts) {
       headcount: mode === 'total' ? field('headcount').value : before.headcount,
       sharedPeople: mode === 'total' ? field('sharedPeople').value : before.sharedPeople,
       sharedNote: mode === 'total' ? field('sharedNote').value : before.sharedNote,
+      sharedProjectIds: mode === 'total' ? field('sharedProjectIds').value.split(',').filter(Boolean) : before.sharedProjectIds,
       memo: field('memo').value.trim()
     };
   }));
@@ -161,36 +164,24 @@ export function readFixedCostInputs(form, previousFixedCosts) {
 
 /* ---------- 다른 학년과 함께 계산 ---------- */
 
-/**
- * 내 사업 중 다른 사업의 같은 기타비(버스비 등)를 탈 인원.
- * 그 사업의 설정을 따른다: 인솔자도 함께 부담이면 인솔자, 공통비이고 신청 후 불참자 공통비 부담이면 불참자도 센다.
- */
+/** 내 사업 중 다른 사업의 같은 기타비(버스비 등)를 함께 부담할 인원. 이미 연결한 사업은 체크해 둔다. */
 export function sharedCandidates(projects, currentProjectId, row) {
-  const builtin = row.dataset.builtin;
-  const label = row.querySelector('[data-fixed-field="label"]')?.value.trim() ?? row.querySelector('th')?.textContent.trim();
-  const fallback = {
+  const target = {
+    builtin: row.dataset.builtin || null,
+    label: row.querySelector('[data-fixed-field="label"]')?.value.trim() ?? row.querySelector('th')?.textContent.trim(),
     includeChaperones: row.querySelector('[data-fixed-field="includeChaperones"]')?.checked ?? false,
     commonCost: row.querySelector('[data-fixed-field="commonCost"]')?.checked ?? false
   };
+  const linked = new Set(row.querySelector('[data-fixed-field="sharedProjectIds"]')?.value.split(',').filter(Boolean) ?? []);
   return projects
     .filter(project => project.id !== currentProjectId)
-    .map(project => {
-      const match = normalizeFixedCosts(project.fixedCosts).find(entry => (builtin ? entry.builtin === builtin : entry.label === label));
-      const settings = match ?? fallback;
-      const c = projectCounts(project);
-      const absent = settings.commonCost && project.dayAbsentSharesCommonCost ? c.contractedAbsent : 0;
-      const chaperones = settings.includeChaperones ? c.chaperones : 0;
-      const parts = [`학생 ${c.participants}명`];
-      if (absent > 0) parts.push(`신청 후 불참 ${absent}명`);
-      if (chaperones > 0) parts.push(`인솔자 ${chaperones}명`);
-      return { id: project.id, title: project.title, people: c.participants + absent + chaperones, detail: parts.join(' + ') };
-    });
+    .map(project => ({ ...sharedPeopleOf(project, target), checked: linked.has(project.id) }));
 }
 
 function sharedPanelHtml(candidates) {
   const list = candidates.length
     ? `<ul class="shared-candidates">${candidates.map(item => `
-        <li><label><input type="checkbox" data-shared-candidate value="${escapeHtml(item.id)}" data-people="${item.people}" data-title="${escapeHtml(item.title)}">
+        <li><label><input type="checkbox" data-shared-candidate value="${escapeHtml(item.id)}" ${item.checked ? 'checked' : ''} data-people="${item.people}" data-title="${escapeHtml(item.title)}">
           <strong>${escapeHtml(item.title)}</strong> ${item.people}명 <small>(${escapeHtml(item.detail)})</small></label></li>`).join('')}</ul>
       <button type="button" class="small-button" data-action="apply-shared-projects">가져오기</button>`
     : '<p class="help">내 사업에 다른 사업이 없습니다. 다른 학년 사업을 먼저 만들거나 직접 입력하세요.</p>';
@@ -235,26 +226,29 @@ export function applySharedCount(button, mode) {
   if (!row?.matches('[data-fixed-row]')) return false;
   let people = 0;
   let note = '';
+  let ids = [];
   if (mode === 'projects') {
     const picked = [...panel.querySelectorAll('[data-shared-candidate]:checked')];
     people = picked.reduce((sum, input) => sum + Number(input.dataset.people || 0), 0);
-    note = picked.map(input => `${input.dataset.title} ${input.dataset.people}명`).join(', ');
+    note = sharedNoteText(picked.map(input => ({ title: input.dataset.title, people: input.dataset.people })));
+    ids = picked.map(input => input.value);
   } else {
     people = Math.max(0, Math.floor(Number(panel.querySelector('[data-shared-manual]')?.value) || 0));
     note = '직접 입력';
   }
   if (people <= 0) return false;
-  setSharedFields(row, people, note);
+  setSharedFields(row, people, note, ids);
   panel.remove();
   return true;
 }
 
 export function clearSharedCount(button) {
   const row = button.closest('[data-fixed-row]');
-  if (row) setSharedFields(row, 0, '');
+  if (row) setSharedFields(row, 0, '', []);
 }
 
-function setSharedFields(row, people, note) {
+function setSharedFields(row, people, note, ids) {
+  row.querySelector('[data-fixed-field="sharedProjectIds"]').value = ids.join(',');
   row.querySelector('[data-fixed-field="sharedPeople"]').value = people ? String(people) : '';
   row.querySelector('[data-fixed-field="sharedNote"]').value = note;
   row.querySelector('[data-fixed-field="headcount"]').value = '';
