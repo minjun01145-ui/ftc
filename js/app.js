@@ -19,6 +19,9 @@ import { scheduleFormHtml, scheduleFormModel, scheduleFormText } from './forms/s
 import { downloadScheduleHwpx } from './forms/scheduleHwpx.js';
 import { costFormHtml, costFormModel, costFormText } from './forms/costForm.js';
 import { downloadCostHwpx } from './forms/costHwpx.js';
+import { downloadBlob } from './forms/hwpxPackage.js';
+import { portalItemsFile } from './forms/portalItems.js';
+import { buildProposal } from './proposalPlanner.js';
 import { getState, persistState, replaceState, updateState } from './state.js';
 import { downloadJson, escapeHtml, number } from './utils.js';
 import {
@@ -784,6 +787,18 @@ main.addEventListener('click', event => {
       .then(() => showMessage('경비 산출내역 HWPX 파일을 만들었습니다.'))
       .catch(error => showMessage(`파일을 만들지 못했습니다: ${error.message}`))
       .finally(() => { button.disabled = false; });
+    return;
+  }
+
+  if (action === 'download-portal-items') {
+    const project = currentProject();
+    if (!project) return;
+    const proposalData = buildProposal(project);
+    const budget = proposalData.budgets.find(item => item.id === button.dataset.budgetId);
+    if (!budget) return;
+    const filename = `${project.title || '체험학습'}_품목내역_${budget.name}.xls`.replace(/[\\/:*?"<>|]/g, '_');
+    downloadBlob(new Blob([portalItemsFile(proposalData, budget.id)], { type: 'application/vnd.ms-excel' }), filename);
+    showMessage(`${budget.name} 품목내역 파일을 만들었습니다. 업무포털에서 이 예산을 고르고 올리세요.`);
     return;
   }
 

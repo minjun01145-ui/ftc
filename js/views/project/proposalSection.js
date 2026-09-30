@@ -6,6 +6,7 @@ import {
   budgetChecklist,
   buildProposal
 } from '../../proposalPlanner.js';
+import { portalBudgets } from '../../forms/portalItems.js';
 import { escapeHtml, number } from '../../utils.js';
 
 const won = value => Math.round(number(value)).toLocaleString('ko-KR');
@@ -411,6 +412,21 @@ function guideHtml(proposal) {
     ${notes.length ? `<ul class="proposal-notes">${notes.map(note => `<li>${escapeHtml(note)}</li>`).join('')}</ul>` : ''}`;
 }
 
+/** 업무포털 품의에 올리는 품목내역 파일. 업무포털은 예산 하나씩 올리므로 예산마다 버튼을 둔다. */
+function portalDownloads(proposal) {
+  const budgets = portalBudgets(proposal);
+  if (!budgets.length) return '';
+  const buttons = budgets.map(budget => `
+    <button type="button" data-action="download-portal-items" data-budget-id="${escapeHtml(budget.id)}">
+      ${escapeHtml(budget.name)} <small>${won(budget.total)}원</small>
+    </button>`).join('');
+  return `
+    <div class="portal-downloads no-print">
+      <h3>업무포털 업로드용 파일(품목내역) 받기</h3>
+      <div class="portal-buttons">${buttons}</div>
+    </div>`;
+}
+
 export function renderProposalSection(project) {
   const proposal = buildProposal(project);
   return `
@@ -426,6 +442,7 @@ export function renderProposalSection(project) {
         <legend>예산별 품의 내용</legend>
         <div class="toolbar no-print"><span class="spacer"></span><button type="button" data-action="copy-table" data-copy-target=".proposal-table">표 복사(한글에 붙여넣기)</button></div>
         ${proposalTable(proposal)}
+        ${portalDownloads(proposal)}
       </fieldset>
       <div class="page-actions no-print"><button type="button" data-action="print">인쇄</button></div>
     </section>`;

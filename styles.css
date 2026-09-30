@@ -681,3 +681,9 @@ input.headcount-input { width: 80px; min-width: 0; }
 .form-preview { background: #fff; padding: 12px; border: 1px dashed #ccc; overflow-x: auto; }
 .form-preview table { min-width: 0; max-width: 900px; }
 .form-preview th, .form-preview td { white-space: normal; }
+
+/* 업무포털 품목내역 받기 */
+.portal-downloads { margin-top: 12px; padding: 10px 12px; border: 1px solid #b7c7d9; background: #f3f7fc; }
+.portal-downloads h3 { margin: 0 0 8px; font-size: 14px; }
+.portal-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+.portal-buttons small { color: #555; margin-left: 4px; }
