@@ -1,12 +1,13 @@
 const KEY = 'fieldtrip-budget-mvp:v2';
 const OLD_KEY = 'fieldtrip-budget-mvp:v1';
+const CONTEST_KEY = 'fieldtrip-cost-manager:v1';
 
 export function saveState(state) {
   localStorage.setItem(KEY, JSON.stringify(state));
 }
 
 export function loadState() {
-  const raw = localStorage.getItem(KEY);
+  const raw = localStorage.getItem(KEY) ?? localStorage.getItem(CONTEST_KEY);
   if (raw) {
     try { return JSON.parse(raw); } catch { return null; }
   }

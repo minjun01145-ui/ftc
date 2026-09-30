@@ -1,14 +1,8 @@
 import { scheduleUploadErrorMessage, validateScheduleFile } from './scheduleUpload.js';
+import { ScheduleDocumentImportError } from '../documents/scheduleDocumentImportError.js';
+export { ScheduleDocumentImportError } from '../documents/scheduleDocumentImportError.js';
 
 export const TRIP_SCHEDULE_DOCUMENT_CAPABILITY = 'trip-schedule-from-document';
-
-export class ScheduleDocumentImportError extends Error {
-  constructor(message, { code = 'SCHEDULE_DOCUMENT_IMPORT_FAILED', cause = null } = {}) {
-    super(message, cause ? { cause } : undefined);
-    this.name = 'ScheduleDocumentImportError';
-    this.code = code;
-  }
-}
 
 export function createScheduleDocumentImportService({ aiClient } = {}) {
   return Object.freeze({

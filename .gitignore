@@ -5,3 +5,6 @@ functions/.env
 functions/.env.*
 !functions/.env.example
 .firebaserc
+node_modules/
+.DS_Store
+Thumbs.db

@@ -27,12 +27,13 @@ export function headcountParticipants({ applicants, vulnerableApplicants, regula
 
 export function headcountIssues({ totalStudents, applicants, vulnerableApplicants = 0, regularDayAbsent = 0, vulnerableDayAbsent = 0 }) {
   const isCount = value => Number.isInteger(value) && value >= 0;
+  if (!isCount(totalStudents)) return ['해당 학년 학생수는 0 이상의 정수여야 합니다.'];
   if (!isCount(applicants)) return ['신청자 수는 0 이상의 정수여야 합니다.'];
   if (!isCount(vulnerableApplicants)) return ['신청자 중 취약계층 인원은 0 이상의 정수여야 합니다.'];
   if (!isCount(regularDayAbsent)) return ['신청 후 불참(비취약계층) 인원은 0 이상의 정수여야 합니다.'];
   if (!isCount(vulnerableDayAbsent)) return ['신청 후 불참(취약계층) 인원은 0 이상의 정수여야 합니다.'];
   if (applicants > 0 && totalStudents <= 0) {
-    return ['대상 학년을 선택하고, 기본정보에서 해당 학년 학생수를 먼저 저장해 주세요.'];
+    return ['해당 학년 학생수를 입력해 주세요.'];
   }
   if (applicants > totalStudents) {
     return [`신청자 ${applicants}명이 해당 학년 학생수 ${totalStudents}명을 초과합니다.`];
@@ -114,7 +115,9 @@ export function refreshHeadcountSummary(form) {
 export function renderHeadcountSection(project, school = {}) {
   const grade = GRADES.includes(Number(project.grade)) ? Number(project.grade) : '';
   const gradeOptions = GRADES.map(value => `<option value="${value}" ${value === grade ? 'selected' : ''}>${value}학년</option>`).join('');
-  const gradeTotal = grade ? gradeStudentCount(school, grade) : '';
+  const gradeTotal = number(project.totalStudents) > 0
+    ? number(project.totalStudents)
+    : (gradeStudentCount(school, grade) || '');
   const values = headcountInputValues(project);
   const notApplied = gradeTotal === '' ? '' : Math.max(0, gradeTotal - values.applicants);
   const participants = headcountParticipants(values);
@@ -129,7 +132,7 @@ export function renderHeadcountSection(project, school = {}) {
           ${gradeOptions}
         </select>
         <label for="totalStudents">해당 학년 학생수</label>
-        <input id="totalStudents" name="totalStudents" type="number" readonly tabindex="-1" value="${escapeHtml(gradeTotal)}" title="기본정보의 학년별 학생수에서 불러옵니다.">
+        <input id="totalStudents" name="totalStudents" type="number" min="0" step="1" value="${escapeHtml(gradeTotal)}" data-headcount-input>
 
         <label for="applicants">신청자 수</label>
         <input id="applicants" name="applicants" type="number" min="0" step="1" value="${number(values.applicants)}" data-headcount-input>

@@ -44,7 +44,7 @@ function headcountCheck(project) {
     `실제 참여 ${summary.participants}명 = 비취약계층 ${summary.regularParticipants}명 + 취약계층 ${summary.vulnerableParticipants}명`
   ];
   const items = [...summary.issues];
-  if (summary.enrolled <= 0) items.push('인원 화면에서 대상 학년을 선택하고 기본정보에 학년별 학생수를 입력해 주세요.');
+  if (summary.enrolled <= 0) items.push('인원 화면에서 해당 학년 학생수를 입력해 주세요.');
   if (notApplied < 0) items.push('신청 인원이 해당 학년 학생수보다 많습니다.');
   if (summary.participants !== c.participants || summary.vulnerableParticipants !== c.vulnerableParticipants
       || absent !== c.contractedAbsent) {

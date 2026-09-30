@@ -104,7 +104,7 @@ export function buildSettlementReport(project, school = {}) {
   if (proposal.unassignedTotal > 0) warnings.push(`품의 도우미에서 아직 배정하지 않은 금액 ${won(proposal.unassignedTotal)}이 있어 부담액이 정확하지 않습니다.`);
   if (grantTotal === null) warnings.push('예산 관리에서 교육청 지원금 교부액을 입력하면 잔액이 계산됩니다.');
   if (grantTotal !== null && values.balance < 0) warnings.push('집행액이 교부액보다 많습니다.');
-  if (!values.schoolName) warnings.push('기본정보에서 학교명을 입력해 주세요.');
+  if (!values.schoolName) warnings.push('사업정보에서 학교명을 입력해 주세요.');
   if (!values.period) warnings.push('사업정보에서 시작일·종료일을 입력해 주세요.');
   if (values.grade === '') warnings.push('인원에서 대상 학년을 선택해 주세요.');
 

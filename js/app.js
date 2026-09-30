@@ -45,6 +45,7 @@ import {
 } from './views/project/fixedCostSection.js';
 import { renderProjectList } from './views/sidebarView.js';
 import { readSchoolForm, renderSchoolPage } from './views/schoolView.js';
+import { renderHomePage } from './views/homeView.js';
 
 const main = document.querySelector('#main');
 const projectList = document.querySelector('#projectList');
@@ -54,7 +55,8 @@ const importInput = document.querySelector('#importInput');
 const message = document.querySelector('#message');
 const schoolNav = document.querySelector('[data-page="school"]');
 
-let currentPage = { type: 'school', projectId: null, section: null };
+const HOME_PAGE = Object.freeze({ type: 'home', projectId: null, section: null });
+let currentPage = HOME_PAGE;
 let dirty = false;
 let messageTimer;
 let schoolSearchRequestId = 0;
@@ -132,9 +134,10 @@ function render() {
   }
 
   const project = state.projects.find(item => item.id === currentPage.projectId);
-  if (!project) {
-    currentPage = { type: 'school', projectId: null, section: null };
-    render();
+  if (currentPage.type !== 'project' || !project) {
+    currentPage = HOME_PAGE;
+    main.innerHTML = renderHomePage(state.projects);
+    setDirty(false);
     return;
   }
 
@@ -155,6 +158,7 @@ function saveSchool(form) {
   updateState(next => {
     next.school = school;
     next.projects = next.projects.map(project => (project.grade
+      && project.totalStudents === gradeStudentCount(state.school, project.grade)
       ? { ...project, totalStudents: gradeStudentCount(school, project.grade) }
       : project));
   });
@@ -295,6 +299,7 @@ function saveProject(form, messageText = '저장했습니다.') {
   if (!project) return;
 
   let nextProject = readProjectForm(form, project);
+  const schoolName = form.elements.schoolName;
   const withSchedule = tripSchedule.applyTo(form, nextProject);
   if (withSchedule) {
     nextProject = withSchedule;
@@ -324,6 +329,7 @@ function saveProject(form, messageText = '저장했습니다.') {
   // 기타비를 다른 학년과 함께 계산하면 상대 사업에도 연결과 계약액을 반영한다.
   updateState(next => {
     next.projects = propagateSharedLinks(next.projects, project, nextProject);
+    if (schoolName) next.school = { ...next.school, name: schoolName.value.trim() };
   });
   persistState();
   render();
@@ -406,7 +412,7 @@ function deleteProject(projectId) {
     state.projects = state.projects.filter(item => item.id !== projectId);
   });
   persistState();
-  if (editingThis) currentPage = { type: 'school', projectId: null, section: null };
+  if (editingThis) currentPage = HOME_PAGE;
   render();
   showMessage('사업을 삭제했습니다.');
 }
@@ -555,7 +561,8 @@ main.addEventListener('change', event => {
 
   if (target.matches('[data-headcount-grade]')) {
     const total = target.form?.elements.totalStudents;
-    if (total) total.value = target.value ? String(gradeStudentCount(getState().school, target.value)) : '';
+    const schoolTotal = gradeStudentCount(getState().school, target.value);
+    if (total && schoolTotal > 0) total.value = String(schoolTotal);
     refreshHeadcountSummary(target.form);
   }
 
@@ -940,7 +947,7 @@ importInput.addEventListener('change', async () => {
     }
     replaceState(parsed);
     persistState();
-    currentPage = { type: 'school', projectId: null, section: null };
+    currentPage = HOME_PAGE;
     render();
     showMessage('저장 파일을 불러왔습니다.');
   } catch {

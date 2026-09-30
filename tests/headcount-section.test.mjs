@@ -25,16 +25,25 @@ test('일정 날짜 중 가장 이른 날과 늦은 날을 사업 기간으로 �
   assert.equal(tripScheduleDateRange([{ date: '' }]), null);
 });
 
-test('해당 학년 학생수는 기본정보에서 읽기 전용으로 불러온다', () => {
+test('해당 학년 학생수는 기본정보에서 불러오고 직접 수정할 수 있다', () => {
   const project = createProject();
   project.grade = 2;
   const html = renderHeadcountSection(project, school);
-  assert.match(html, /id="totalStudents"[^>]*readonly[^>]*value="71"/);
+  assert.match(html, /id="totalStudents"[^>]*value="71"/);
+  assert.doesNotMatch(html, /id="totalStudents"[^>]*readonly/);
   assert.match(html, /<label for="applicants">신청자 수<\/label>/);
   assert.match(html, /name="vulnerableApplicants"/);
   assert.doesNotMatch(html, /실제 참여 학생 수/);
   assert.equal(gradeStudentCount(school, 3), 80);
   assert.equal(gradeStudentCount(school, ''), 0);
+});
+
+test('사업에 저장한 학생수가 학교 기본정보와 달라도 유지한다', () => {
+  const project = createProject();
+  project.grade = 2;
+  project.totalStudents = 72;
+  assert.match(renderHeadcountSection(project, school), /id="totalStudents"[^>]*value="72"/);
+  assert.deepEqual(headcountIssues({ totalStudents: 1.5, applicants: 1 }), ['해당 학년 학생수는 0 이상의 정수여야 합니다.']);
 });
 
 test('신청자 수와 취약계층 신청자 수를 인원 흐름에 반영한다', () => {

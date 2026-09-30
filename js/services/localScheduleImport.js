@@ -2,7 +2,8 @@ import { DocumentReadError } from '../documents/documentReadError.js';
 import { readHwpxDocument } from '../documents/hwpxReader.js';
 import { readPdfLayout } from '../documents/pdfLayoutReader.js';
 import { parseScheduleFromLayout, parseScheduleFromTables } from '../scheduleImport/scheduleDocumentParser.js';
-import { ScheduleDocumentImportError } from './scheduleDocumentImport.js';
+import { ScheduleDocumentImportError } from '../documents/scheduleDocumentImportError.js';
+export { ScheduleDocumentImportError } from '../documents/scheduleDocumentImportError.js';
 import { scheduleUploadErrorMessage, validateScheduleFile } from './scheduleUpload.js';
 
 /**

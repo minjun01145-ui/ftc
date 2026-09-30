@@ -52,7 +52,7 @@ export function createTripScheduleController({
     try {
       const items = await documentImport.importFile(file, {
         projectTitle: project.title,
-        schoolYear: getSchoolYear(),
+        schoolYear: Number(String(project.startDate ?? '').slice(0, 4)) || getSchoolYear(),
         startDate: project.startDate,
         endDate: project.endDate
       });
